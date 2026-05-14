@@ -6,8 +6,7 @@ import "object.proto";
 import "google/protobuf/struct.proto";
 
 message CollisionInfo {
-  bool  occurred = 1;
-  int64 time_ns  = 2;
+  bool occurred = 1;
 
   // Optional actor references if the simulator can provide them.
   optional ActorRef actor_a = 3;
