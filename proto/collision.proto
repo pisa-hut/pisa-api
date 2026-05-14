@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package pisa_api;
+
+import "object.proto";
+import "google/protobuf/struct.proto";
+
+message CollisionInfo {
+  bool  occurred = 1;
+  int64 time_ns  = 2;
+
+  // Optional actor references if the simulator can provide them.
+  optional ActorRef actor_a = 3;
+  optional ActorRef actor_b = 4;
+
+  // Optional implementation detail such as impulse or contact normal.
+  google.protobuf.Struct details = 5;
+}

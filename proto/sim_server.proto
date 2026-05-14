@@ -9,6 +9,7 @@ import "object.proto";
 import "path.proto";
 import "pong.proto";
 import "scenario.proto";
+import "runtime_frame.proto";
 
 service SimServer {
   // Check if the server is alive
@@ -25,6 +26,9 @@ service SimServer {
 
   // Stop the simulation
   rpc Stop(Empty) returns (Empty);
+
+  // Close the simulation server
+  rpc Close(Empty) returns (Empty);
 
   // Check if the simulation should quit
   rpc ShouldQuit(Empty) returns (SimServerMessages.ShouldQuitResponse);
@@ -50,7 +54,7 @@ message SimServerMessages {
   }
 
   message ResetResponse {
-    repeated ObjectState objects = 1;
+    RuntimeFrame frame = 1;
   }
 
   message StepRequest {
@@ -59,7 +63,7 @@ message SimServerMessages {
   }
 
   message StepResponse {
-    repeated ObjectState objects = 1;
+    RuntimeFrame frame = 1;
   }
 
   message ShouldQuitResponse {

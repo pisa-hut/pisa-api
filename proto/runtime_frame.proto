@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package pisa_api;
+
+import "object.proto";
+import "collision.proto";
+import "google/protobuf/struct.proto";
+
+message RuntimeFrame {
+  int64 sim_time_ns = 1;
+
+  repeated ObjectState objects = 2;
+
+  optional CollisionInfo collision = 3;
+
+  google.protobuf.Struct extras = 4;
+}

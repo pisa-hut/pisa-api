@@ -26,16 +26,19 @@ service AvServer {
   // Stop the AV system
   rpc Stop(Empty) returns (Empty);
 
+  // Close the AV server
+  rpc Close(Empty) returns (Empty);
+
   // Check if the AV system should quit
   rpc ShouldQuit(Empty) returns (AvServerMessages.ShouldQuitResponse);
 }
 
 message AvServerMessages {
   message InitRequest {
-    Config       config        = 1;
-    Path         output_dir    = 2;
-    string       map_name      = 3;
-    double       dt            = 4;
+    Config config     = 1;
+    Path   output_dir = 2;
+    string map_name   = 3;
+    double dt         = 4;
   }
 
   message InitResponse {

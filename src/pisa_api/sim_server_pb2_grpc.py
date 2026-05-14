@@ -61,6 +61,11 @@ class SimServerStub(object):
                 request_serializer=empty__pb2.Empty.SerializeToString,
                 response_deserializer=empty__pb2.Empty.FromString,
                 _registered_method=True)
+        self.Close = channel.unary_unary(
+                '/pisa_api.SimServer/Close',
+                request_serializer=empty__pb2.Empty.SerializeToString,
+                response_deserializer=empty__pb2.Empty.FromString,
+                _registered_method=True)
         self.ShouldQuit = channel.unary_unary(
                 '/pisa_api.SimServer/ShouldQuit',
                 request_serializer=empty__pb2.Empty.SerializeToString,
@@ -106,6 +111,13 @@ class SimServerServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Close(self, request, context):
+        """Close the simulation server
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def ShouldQuit(self, request, context):
         """Check if the simulation should quit
         """
@@ -138,6 +150,11 @@ def add_SimServerServicer_to_server(servicer, server):
             ),
             'Stop': grpc.unary_unary_rpc_method_handler(
                     servicer.Stop,
+                    request_deserializer=empty__pb2.Empty.FromString,
+                    response_serializer=empty__pb2.Empty.SerializeToString,
+            ),
+            'Close': grpc.unary_unary_rpc_method_handler(
+                    servicer.Close,
                     request_deserializer=empty__pb2.Empty.FromString,
                     response_serializer=empty__pb2.Empty.SerializeToString,
             ),
@@ -280,6 +297,33 @@ class SimServer(object):
             request,
             target,
             '/pisa_api.SimServer/Stop',
+            empty__pb2.Empty.SerializeToString,
+            empty__pb2.Empty.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Close(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/pisa_api.SimServer/Close',
             empty__pb2.Empty.SerializeToString,
             empty__pb2.Empty.FromString,
             options,
