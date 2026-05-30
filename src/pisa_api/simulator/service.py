@@ -42,8 +42,6 @@ class Simulator(Protocol):
 
     def step(self, request: StepRequest) -> StepResponse: ...
 
-    def stop(self) -> None: ...
-
     def should_quit(self) -> bool: ...
 
 
@@ -209,26 +207,6 @@ class GenericSimulatorService(BaseSimServer):
                 )
             return step_response_to_proto(response)
 
-    def Stop(self, request, context):  # noqa: N802
-        logger.debug("Received Stop request from client: %s", _peer(context))
-        with self._lock:
-            if not self._initialized:
-                return self._failed_precondition(
-                    context,
-                    "Simulator not initialized. Call Init first.",
-                    Empty(),
-                )
-
-            self._stop(context)
-            return Empty()
-
-    def Close(self, request, context):  # noqa: N802
-        logger.debug("Received Close request from client: %s", _peer(context))
-        with self._lock:
-            if self._initialized:
-                self._stop(context)
-            return Empty()
-
     def ShouldQuit(self, request, context):  # noqa: N802
         logger.debug("Received ShouldQuit request from client: %s", _peer(context))
         with self._lock:
@@ -238,27 +216,6 @@ class GenericSimulatorService(BaseSimServer):
             return sim_server_pb2.SimServerMessages.ShouldQuitResponse(
                 should_quit=self._simulator.should_quit()
             )
-
-    def _stop(self, context: Any) -> None:
-        # Dispatch by exception type so a transient teardown failure
-        # stays distinguishable from a wrapper bug (see the AV-side
-        # _stop for the rationale). The `finally` keeps the invariant
-        # that a half-failed teardown still resets `_initialized`.
-        try:
-            self._simulator.stop()
-        except SimulatorNotReady as exc:
-            logger.error("Failed to stop %s: %s", self._name, exc)
-            context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
-            context.set_details(f"Failed to stop {self._name}: {exc}")
-        except Exception as exc:
-            # Includes InvalidSimulatorRequest: stop() takes no request
-            # payload, so a wrapper raising that here is a bug.
-            logger.exception("Failed to stop %s", self._name)
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(f"Failed to stop {self._name}: {exc}")
-        finally:
-            self._initialized = False
-            self._reset_done = False
 
     @staticmethod
     def _invalid_argument(context, details: str, response):

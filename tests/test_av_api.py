@@ -228,14 +228,16 @@ def test_reset_precondition_failed_returns_failed_precondition() -> None:
     assert context.code == grpc.StatusCode.FAILED_PRECONDITION
 
 
-def test_reset_runtime_error_still_failed_precondition() -> None:
-    """Generic RuntimeError keeps the previous "skip this concrete"
-    behaviour — only InvalidAvRequest gets promoted to INVALID_ARGUMENT."""
+def test_reset_runtime_error_is_internal() -> None:
+    """Strict contract: only the typed AvError subclasses get
+    well-known gRPC status codes. A bare RuntimeError from the
+    wrapper is treated as a wrapper bug → INTERNAL, not as a per-
+    concrete precondition failure."""
     service = GenericAvService(_RaisingAvSystem(RuntimeError("oops")), name="FakeAV")
     service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
-    assert context.code == grpc.StatusCode.FAILED_PRECONDITION
+    assert context.code == grpc.StatusCode.INTERNAL
 
 
 def test_reset_av_unavailable_returns_unavailable() -> None:
@@ -287,67 +289,6 @@ def test_step_invalid_av_request_returns_invalid_argument() -> None:
     context = FakeContext()
     service.Step(av_server_pb2.AvServerMessages.StepRequest(), context)
     assert context.code == grpc.StatusCode.INVALID_ARGUMENT
-
-
-def _init_for_stop(service: GenericAvService) -> FakeAvSystem:
-    """Helper: Init the service so a follow-up Stop / Close goes through
-    the wrapper's stop() rather than short-circuiting on `not _initialized`."""
-    service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
-    return service._av_system  # type: ignore[attr-defined]
-
-
-def test_stop_av_unavailable_returns_unavailable() -> None:
-    service = GenericAvService(FakeAvSystem(), name="FakeAV")
-    av_system = _init_for_stop(service)
-    av_system.stop = lambda: (_ for _ in ()).throw(AvUnavailable("AV gone"))
-    context = FakeContext()
-    service.Stop(av_server_pb2.AvServerMessages.InitRequest(), context)  # request type unused
-    assert context.code == grpc.StatusCode.UNAVAILABLE
-    # Invariant: even a failed teardown clears the state so the next
-    # Init can proceed.
-    assert service._initialized is False  # type: ignore[attr-defined]
-
-
-def test_stop_av_precondition_failed_returns_failed_precondition() -> None:
-    service = GenericAvService(FakeAvSystem(), name="FakeAV")
-    av_system = _init_for_stop(service)
-    av_system.stop = lambda: (_ for _ in ()).throw(AvPreconditionFailed("busy"))
-    context = FakeContext()
-    service.Stop(av_server_pb2.AvServerMessages.InitRequest(), context)
-    assert context.code == grpc.StatusCode.FAILED_PRECONDITION
-    assert service._initialized is False  # type: ignore[attr-defined]
-
-
-def test_stop_unknown_exception_returns_internal() -> None:
-    service = GenericAvService(FakeAvSystem(), name="FakeAV")
-    av_system = _init_for_stop(service)
-    av_system.stop = lambda: (_ for _ in ()).throw(RuntimeError("oops"))
-    context = FakeContext()
-    service.Stop(av_server_pb2.AvServerMessages.InitRequest(), context)
-    assert context.code == grpc.StatusCode.INTERNAL
-    assert service._initialized is False  # type: ignore[attr-defined]
-
-
-def test_close_routes_av_unavailable_same_as_stop() -> None:
-    """Close goes through the same _stop helper as Stop, so the
-    dispatch needs to behave identically when the wrapper raises."""
-    service = GenericAvService(FakeAvSystem(), name="FakeAV")
-    av_system = _init_for_stop(service)
-    av_system.stop = lambda: (_ for _ in ()).throw(AvUnavailable("AV gone"))
-    context = FakeContext()
-    service.Close(av_server_pb2.AvServerMessages.InitRequest(), context)
-    assert context.code == grpc.StatusCode.UNAVAILABLE
-    assert service._initialized is False  # type: ignore[attr-defined]
-
-
-def test_close_on_uninitialized_service_is_a_noop() -> None:
-    service = GenericAvService(FakeAvSystem(), name="FakeAV")
-    context = FakeContext()
-    response = service.Close(av_server_pb2.AvServerMessages.InitRequest(), context)
-    assert context.code is None
-    from pisa_api.empty_pb2 import Empty
-
-    assert isinstance(response, Empty)
 
 
 def test_serve_av_system_wraps_existing_serve_av(monkeypatch) -> None:

@@ -20,7 +20,6 @@ from pisa_api.simulator import (
     ShapeData,
     ShapeDimensionData,
     ShapeType,
-    SimulatorNotReady,
     StepRequest,
     StepResponse,
 )
@@ -311,41 +310,6 @@ def test_step_returning_bare_runtime_frame_is_internal_error() -> None:
     service.Step(sim_server_pb2.SimServerMessages.StepRequest(), context)
     assert context.code == grpc.StatusCode.INTERNAL
     assert "must return StepResponse" in context.details
-
-
-def _init_for_stop(service: GenericSimulatorService) -> FakeSimulator:
-    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
-    return service._simulator  # type: ignore[attr-defined]
-
-
-def test_stop_simulator_not_ready_returns_failed_precondition() -> None:
-    service = GenericSimulatorService(FakeSimulator(), name="Fake")
-    simulator = _init_for_stop(service)
-    simulator.stop = lambda: (_ for _ in ()).throw(SimulatorNotReady("busy"))
-    context = FakeContext()
-    service.Stop(sim_server_pb2.SimServerMessages.InitRequest(), context)
-    assert context.code == grpc.StatusCode.FAILED_PRECONDITION
-    assert service._initialized is False  # type: ignore[attr-defined]
-
-
-def test_stop_unknown_exception_returns_internal_sim() -> None:
-    service = GenericSimulatorService(FakeSimulator(), name="Fake")
-    simulator = _init_for_stop(service)
-    simulator.stop = lambda: (_ for _ in ()).throw(RuntimeError("oops"))
-    context = FakeContext()
-    service.Stop(sim_server_pb2.SimServerMessages.InitRequest(), context)
-    assert context.code == grpc.StatusCode.INTERNAL
-    assert service._initialized is False  # type: ignore[attr-defined]
-
-
-def test_close_on_uninitialized_simulator_is_a_noop() -> None:
-    service = GenericSimulatorService(FakeSimulator(), name="Fake")
-    context = FakeContext()
-    response = service.Close(sim_server_pb2.SimServerMessages.InitRequest(), context)
-    assert context.code is None
-    from pisa_api.empty_pb2 import Empty
-
-    assert isinstance(response, Empty)
 
 
 def test_serve_simulator_wraps_existing_serve_sim(monkeypatch) -> None:

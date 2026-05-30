@@ -45,8 +45,6 @@ class AvSystem(Protocol):
 
     def step(self, request: StepRequest) -> StepResponse: ...
 
-    def stop(self) -> None: ...
-
     def should_quit(self) -> bool: ...
 
 
@@ -137,11 +135,7 @@ class GenericAvService(BaseAvServer):
                     f"Failed to reset {self._name}: {exc}",
                     av_server_pb2.AvServerMessages.ResetResponse(),
                 )
-            except (AvPreconditionFailed, RuntimeError) as exc:
-                # Symmetric with Step(): a bare RuntimeError from the
-                # wrapper is treated as a per-concrete precondition
-                # failure rather than INTERNAL, so simcore can skip and
-                # try the next sample instead of failing the run.
+            except AvPreconditionFailed as exc:
                 return self._failed_precondition(
                     context,
                     f"Failed to reset {self._name}: {exc}",
@@ -201,7 +195,7 @@ class GenericAvService(BaseAvServer):
                     f"Failed to step {self._name}: {exc}",
                     av_server_pb2.AvServerMessages.StepResponse(),
                 )
-            except (AvPreconditionFailed, RuntimeError) as exc:
+            except AvPreconditionFailed as exc:
                 return self._failed_precondition(
                     context,
                     f"Failed to step {self._name}: {exc}",
@@ -226,26 +220,6 @@ class GenericAvService(BaseAvServer):
                 )
             return step_response_to_proto(response)
 
-    def Stop(self, request, context):  # noqa: N802
-        logger.debug("Received Stop request from client: %s", _peer(context))
-        with self._lock:
-            if not self._initialized:
-                return self._failed_precondition(
-                    context,
-                    "AV system not initialized. Call Init first.",
-                    Empty(),
-                )
-
-            self._stop(context)
-            return Empty()
-
-    def Close(self, request, context):  # noqa: N802
-        logger.debug("Received Close request from client: %s", _peer(context))
-        with self._lock:
-            if self._initialized:
-                self._stop(context)
-            return Empty()
-
     def ShouldQuit(self, request, context):  # noqa: N802
         logger.debug("Received ShouldQuit request from client: %s", _peer(context))
         with self._lock:
@@ -255,35 +229,6 @@ class GenericAvService(BaseAvServer):
             return av_server_pb2.AvServerMessages.ShouldQuitResponse(
                 should_quit=self._av_system.should_quit()
             )
-
-    def _stop(self, context: Any) -> None:
-        # Stop / Close were previously a flat `except Exception → INTERNAL`,
-        # which lost the three-way error semantics the rest of the
-        # handlers preserve. Dispatch by exception type so the client can
-        # tell a transient teardown failure (UNAVAILABLE) from a wrapper
-        # bug (INTERNAL). The `finally` keeps the invariant that a
-        # half-failed teardown still resets `_initialized` so the next
-        # Init can proceed.
-        try:
-            self._av_system.stop()
-        except AvUnavailable as exc:
-            logger.error("Failed to stop %s: %s", self._name, exc)
-            context.set_code(grpc.StatusCode.UNAVAILABLE)
-            context.set_details(f"Failed to stop {self._name}: {exc}")
-        except AvPreconditionFailed as exc:
-            logger.error("Failed to stop %s: %s", self._name, exc)
-            context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
-            context.set_details(f"Failed to stop {self._name}: {exc}")
-        except Exception as exc:
-            # Includes InvalidAvRequest: stop() takes no request payload,
-            # so a wrapper raising that here is a bug — surface as
-            # INTERNAL alongside any other unexpected exception.
-            logger.exception("Failed to stop %s", self._name)
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(f"Failed to stop {self._name}: {exc}")
-        finally:
-            self._initialized = False
-            self._reset_done = False
 
     @staticmethod
     def _invalid_argument(context, details: str, response):
@@ -297,9 +242,11 @@ class GenericAvService(BaseAvServer):
 
     @staticmethod
     def _failed_precondition(context, details: str, response):
-        """Used for AvPreconditionFailed (and generic RuntimeError from the
-        wrapper). This concrete is unrunnable but the logical scenario is
-        fine — simcore should skip to the next sampled concrete."""
+        """Used for `AvPreconditionFailed` — this concrete is unrunnable
+        but the logical scenario is fine, simcore should skip to the
+        next sample. Bare `RuntimeError` no longer rides along here; a
+        wrapper that wants this routing must raise `AvPreconditionFailed`
+        explicitly."""
         logger.error(details)
         context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
         context.set_details(details)
