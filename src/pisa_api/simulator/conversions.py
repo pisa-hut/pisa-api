@@ -23,7 +23,6 @@ from .types import (
     EgoConfigData,
     GoalConfigData,
     InitRequest,
-    InitResponse,
     LanePositionData,
     ObjectKinematicData,
     ObjectStateData,
@@ -352,14 +351,6 @@ def init_request_to_proto(request: InitRequest) -> SimServerMessages.InitRequest
     )
 
 
-def init_response_from_proto(response: SimServerMessages.InitResponse) -> InitResponse:
-    return InitResponse(success=response.success, msg=response.msg)
-
-
-def init_response_to_proto(response: InitResponse) -> SimServerMessages.InitResponse:
-    return SimServerMessages.InitResponse(success=response.success, msg=response.msg)
-
-
 def reset_request_from_proto(request: SimServerMessages.ResetRequest) -> ResetRequest:
     return ResetRequest(
         output_dir=Path(request.output_dir.path),
@@ -448,8 +439,6 @@ __all__ = [
     "goal_config_to_proto",
     "init_request_from_proto",
     "init_request_to_proto",
-    "init_response_from_proto",
-    "init_response_to_proto",
     "lane_position_from_proto",
     "lane_position_to_proto",
     "object_kinematic_from_proto",

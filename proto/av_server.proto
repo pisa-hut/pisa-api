@@ -15,7 +15,7 @@ service AvServer {
   rpc Ping(Empty) returns (Pong);
 
   // Initialize the AV system with configuration parameters
-  rpc Init(AvServerMessages.InitRequest) returns (AvServerMessages.InitResponse);
+  rpc Init(AvServerMessages.InitRequest) returns (Empty);
 
   // Reset the AV system with a new scenario and initial observation
   rpc Reset(AvServerMessages.ResetRequest) returns (AvServerMessages.ResetResponse);
@@ -41,11 +41,6 @@ message AvServerMessages {
     double dt         = 4;
   }
 
-  message InitResponse {
-    bool   success = 1;
-    string msg     = 2;
-  }
-
   message ResetRequest {
     Path                 output_dir          = 1;
     ScenarioPack         scenario_pack       = 2;
@@ -66,6 +61,7 @@ message AvServerMessages {
   }
 
   message ShouldQuitResponse {
-    bool should_quit = 1;
+    bool   should_quit = 1;
+    string msg         = 2;
   }
 }
