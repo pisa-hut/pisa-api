@@ -257,9 +257,27 @@ class GenericAvService(BaseAvServer):
             )
 
     def _stop(self, context: Any) -> None:
+        # Stop / Close were previously a flat `except Exception → INTERNAL`,
+        # which lost the three-way error semantics the rest of the
+        # handlers preserve. Dispatch by exception type so the client can
+        # tell a transient teardown failure (UNAVAILABLE) from a wrapper
+        # bug (INTERNAL). The `finally` keeps the invariant that a
+        # half-failed teardown still resets `_initialized` so the next
+        # Init can proceed.
         try:
             self._av_system.stop()
+        except AvUnavailable as exc:
+            logger.error("Failed to stop %s: %s", self._name, exc)
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            context.set_details(f"Failed to stop {self._name}: {exc}")
+        except AvPreconditionFailed as exc:
+            logger.error("Failed to stop %s: %s", self._name, exc)
+            context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+            context.set_details(f"Failed to stop {self._name}: {exc}")
         except Exception as exc:
+            # Includes InvalidAvRequest: stop() takes no request payload,
+            # so a wrapper raising that here is a bug — surface as
+            # INTERNAL alongside any other unexpected exception.
             logger.exception("Failed to stop %s", self._name)
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"Failed to stop {self._name}: {exc}")
