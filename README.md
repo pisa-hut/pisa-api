@@ -4,8 +4,30 @@ Shared gRPC contract between the PISA simulation orchestrator and the AV / simul
 
 ## Install
 
+Not published to PyPI — install directly from GitHub. With `uv`:
+
 ```bash
-uv add pisa-api               # or: pip install pisa-api
+uv add --git https://github.com/pisa-hut/pisa-api.git pisa-api
+```
+
+Or pin in `pyproject.toml` the way every downstream consumer already does:
+
+```toml
+[project]
+dependencies = [
+    "pisa-api>=0.2.0",
+]
+
+[tool.uv.sources]
+pisa-api = { git = "https://github.com/pisa-hut/pisa-api.git" }
+```
+
+Add `rev = "<sha>"` / `tag = "..."` / `branch = "..."` to pin a specific revision. Without it `uv` resolves to the current `main` tip and writes the resolved sha into `uv.lock`.
+
+With plain `pip`:
+
+```bash
+pip install "pisa-api @ git+https://github.com/pisa-hut/pisa-api.git"
 ```
 
 ## Two shapes that matter
