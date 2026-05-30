@@ -32,7 +32,7 @@ pip install "pisa-api @ git+https://github.com/pisa-hut/pisa-api.git"
 
 ## Two shapes that matter
 
-- **`pisa_api.av`** — `AvServer` contract: `Init`, `Reset`, `Step`, `ShouldQuit` (`Stop` / `Close` are declared in the proto but the generic server intentionally returns `UNIMPLEMENTED`; teardown happens via container lifecycle).
+- **`pisa_api.av`** — `AvServer` contract: `Init`, `Reset`, `Step`, `Stop`, `ShouldQuit`. (`Close` is declared in the proto but the generic server intentionally returns `UNIMPLEMENTED` — see *Breaking-change history* below.)
 - **`pisa_api.simulator`** — `SimServer` contract with the same four methods.
 
 Both expose:
@@ -133,6 +133,6 @@ Recent revisions are deliberately incompatible with older wrappers:
 - **Bare return types rejected.** `return cmd` from `reset()` / `step()` → must be `return ResetResponse(ctrl_cmd=cmd)` / `return StepResponse(...)`.
 - **`SimulatorNotReady` renamed** to `SimulatorPreconditionFailed` for AV/Sim parity.
 - **`RuntimeError` no longer free-passes.** Used to bundle with `*PreconditionFailed` → `FAILED_PRECONDITION`; now goes to `INTERNAL`. Wrappers must raise the typed exception explicitly.
-- **`Stop` / `Close` not implemented.** Generic servers return `UNIMPLEMENTED`; teardown is the container's responsibility.
+- **`Close` not implemented.** `Close` is declared in the proto but the generic server returns `UNIMPLEMENTED` — clients shouldn't rely on it; container-lifecycle teardown is the contract. `Stop` *is* implemented (it raises through the same dispatch table as Reset/Step), so clients can release the AV / simulator between scenarios without rebuilding the wrapper container.
 
 Any wrapper or client (`simcore`, `runner/`, the four AV/Sim wrappers under `wrappers/`) needs updating before it can pull a new `pisa-api` revision.

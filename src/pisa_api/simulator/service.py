@@ -42,6 +42,8 @@ class Simulator(Protocol):
 
     def step(self, request: StepRequest) -> StepResponse: ...
 
+    def stop(self) -> None: ...
+
     def should_quit(self) -> bool: ...
 
 
@@ -184,6 +186,28 @@ class GenericSimulatorService(BaseSimServer):
                     context, "step", "StepResponse", response, empty_response
                 )
             return step_response_to_proto(response)
+
+    def Stop(self, request, context):  # noqa: N802
+        # `Close` is intentionally NOT implemented — see the AV-side
+        # comment. Stop is exposed so clients can release the simulator
+        # between scenarios without rebuilding the wrapper container.
+        logger.debug("Received Stop request from client: %s", _peer(context))
+        with self._lock:
+            if not self._initialized:
+                return self._status(
+                    context,
+                    grpc.StatusCode.FAILED_PRECONDITION,
+                    "Simulator not initialized. Call Init first.",
+                    Empty(),
+                )
+            try:
+                self._simulator.stop()
+            except Exception as exc:
+                return self._dispatch_exception(context, "stop", exc, Empty())
+            finally:
+                self._initialized = False
+                self._reset_done = False
+            return Empty()
 
     def ShouldQuit(self, request, context):  # noqa: N802
         logger.debug("Received ShouldQuit request from client: %s", _peer(context))

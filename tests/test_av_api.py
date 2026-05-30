@@ -300,6 +300,44 @@ def test_step_invalid_av_request_returns_invalid_argument() -> None:
     assert context.code == grpc.StatusCode.INVALID_ARGUMENT
 
 
+def test_stop_clears_initialized_state_on_success() -> None:
+    av_system = FakeAvSystem()
+    service = GenericAvService(av_system, name="FakeAV")
+    service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
+    context = FakeContext()
+    service.Stop(av_server_pb2.AvServerMessages.InitRequest(), context)
+    assert context.code is None
+    assert av_system.stopped is True
+    assert service._initialized is False  # type: ignore[attr-defined]
+    assert service._reset_done is False  # type: ignore[attr-defined]
+
+
+def test_stop_before_init_returns_failed_precondition() -> None:
+    service = GenericAvService(FakeAvSystem(), name="FakeAV")
+    context = FakeContext()
+    service.Stop(av_server_pb2.AvServerMessages.InitRequest(), context)
+    assert context.code == grpc.StatusCode.FAILED_PRECONDITION
+
+
+def test_stop_dispatches_av_unavailable_to_unavailable() -> None:
+    av_system = FakeAvSystem()
+    service = GenericAvService(av_system, name="FakeAV")
+    service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
+    av_system.stop = lambda: (_ for _ in ()).throw(AvUnavailable("AV gone"))
+    context = FakeContext()
+    service.Stop(av_server_pb2.AvServerMessages.InitRequest(), context)
+    assert context.code == grpc.StatusCode.UNAVAILABLE
+    # State still drops via finally even though the wrapper raised.
+    assert service._initialized is False  # type: ignore[attr-defined]
+
+
+def test_close_is_unimplemented() -> None:
+    """Close is declared in the proto but the generic server doesn't
+    override it. Clients calling Close should hit the auto-generated
+    stub — verify GenericAvService doesn't define its own Close."""
+    assert "Close" not in GenericAvService.__dict__
+
+
 def test_serve_av_system_wraps_existing_serve_av(monkeypatch) -> None:
     import pisa_api.av.service as service_module
 
