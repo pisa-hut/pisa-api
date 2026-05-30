@@ -12,6 +12,7 @@ from pisa_api.simulator import (
     ObjectKinematicData,
     ObjectStateData,
     ResetRequest,
+    ResetResponse,
     RoadObjectType,
     RuntimeFrameData,
     ScenarioData,
@@ -20,6 +21,7 @@ from pisa_api.simulator import (
     ShapeDimensionData,
     ShapeType,
     StepRequest,
+    StepResponse,
 )
 from pisa_api.simulator.conversions import (
     init_request_from_proto,
@@ -58,13 +60,13 @@ class FakeSimulator:
     def init(self, request: InitRequest):
         self.init_request = request
 
-    def reset(self, request: ResetRequest) -> RuntimeFrameData:
+    def reset(self, request: ResetRequest) -> ResetResponse:
         self.reset_request = request
-        return RuntimeFrameData(sim_time_ns=0)
+        return ResetResponse(frame=RuntimeFrameData(sim_time_ns=0))
 
-    def step(self, request: StepRequest) -> RuntimeFrameData:
+    def step(self, request: StepRequest) -> StepResponse:
         self.step_request = request
-        return RuntimeFrameData(sim_time_ns=request.timestamp_ns)
+        return StepResponse(frame=RuntimeFrameData(sim_time_ns=request.timestamp_ns))
 
     def stop(self) -> None:
         self.stopped = True
@@ -281,6 +283,33 @@ def test_generic_service_rejects_step_before_reset() -> None:
     assert response == sim_server_pb2.SimServerMessages.StepResponse()
     assert context.code == grpc.StatusCode.FAILED_PRECONDITION
     assert "Reset" in context.details
+
+
+def test_reset_returning_none_is_internal_error() -> None:
+    """Wrapper contract: reset() must return ResetResponse. None
+    surfaces as INTERNAL so the wrapper author can see the bug."""
+    simulator = FakeSimulator()
+    simulator.reset = lambda _req: None
+    service = GenericSimulatorService(simulator, name="Fake")
+    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
+    context = FakeContext()
+    service.Reset(sim_server_pb2.SimServerMessages.ResetRequest(), context)
+    assert context.code == grpc.StatusCode.INTERNAL
+    assert "must return ResetResponse" in context.details
+
+
+def test_step_returning_bare_runtime_frame_is_internal_error() -> None:
+    """Old shortcut where step() returned a bare RuntimeFrameData is gone;
+    wrappers must wrap it in a StepResponse explicitly."""
+    simulator = FakeSimulator()
+    service = GenericSimulatorService(simulator, name="Fake")
+    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
+    service.Reset(sim_server_pb2.SimServerMessages.ResetRequest(), FakeContext())
+    simulator.step = lambda _req: RuntimeFrameData(sim_time_ns=0)
+    context = FakeContext()
+    service.Step(sim_server_pb2.SimServerMessages.StepRequest(), context)
+    assert context.code == grpc.StatusCode.INTERNAL
+    assert "must return StepResponse" in context.details
 
 
 def test_serve_simulator_wraps_existing_serve_sim(monkeypatch) -> None:

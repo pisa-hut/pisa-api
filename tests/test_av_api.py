@@ -62,13 +62,17 @@ class FakeAvSystem:
     def init(self, request: InitRequest):
         self.init_request = request
 
-    def reset(self, request: ResetRequest) -> ControlCommand:
+    def reset(self, request: ResetRequest) -> ResetResponse:
         self.reset_request = request
-        return ControlCommand(mode=ControlMode.ACKERMANN, payload={"speed": 1.0})
+        return ResetResponse(
+            ctrl_cmd=ControlCommand(mode=ControlMode.ACKERMANN, payload={"speed": 1.0})
+        )
 
-    def step(self, request: StepRequest) -> ControlCommand:
+    def step(self, request: StepRequest) -> StepResponse:
         self.step_request = request
-        return ControlCommand(mode=ControlMode.ACKERMANN, payload={"speed": 2.0})
+        return StepResponse(
+            ctrl_cmd=ControlCommand(mode=ControlMode.ACKERMANN, payload={"speed": 2.0})
+        )
 
     def stop(self) -> None:
         self.stopped = True
@@ -240,6 +244,32 @@ def test_reset_av_unavailable_returns_unavailable() -> None:
     context = FakeContext()
     service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
     assert context.code == grpc.StatusCode.UNAVAILABLE
+
+
+def test_reset_returning_none_is_internal_error() -> None:
+    """Wrapper contract: reset() must return ResetResponse. None
+    surfaces as INTERNAL so the wrapper author can see the bug."""
+    av_system = FakeAvSystem()
+    av_system.reset = lambda _req: None  # contract violation
+    service = GenericAvService(av_system, name="FakeAV")
+    service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
+    context = FakeContext()
+    service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
+    assert context.code == grpc.StatusCode.INTERNAL
+    assert "must return ResetResponse" in context.details
+
+
+def test_step_returning_bare_control_command_is_internal_error() -> None:
+    """Old shortcut where step() returned a bare ControlCommand is gone;
+    wrappers must wrap it in a StepResponse explicitly."""
+    av_system = FakeAvSystem()
+    service = GenericAvService(av_system, name="FakeAV")
+    _init_and_reset(service)
+    av_system.step = lambda _req: ControlCommand(mode=ControlMode.ACKERMANN)
+    context = FakeContext()
+    service.Step(av_server_pb2.AvServerMessages.StepRequest(), context)
+    assert context.code == grpc.StatusCode.INTERNAL
+    assert "must return StepResponse" in context.details
 
 
 def test_step_invalid_av_request_returns_invalid_argument() -> None:

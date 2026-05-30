@@ -10,7 +10,6 @@ import grpc
 
 from pisa_api import av_server_pb2
 from pisa_api.empty_pb2 import Empty
-from pisa_api.types import ControlCommand
 from pisa_api.wrapper import BaseAvServer, serve_av
 
 from .conversions import (
@@ -32,11 +31,19 @@ logger = logging.getLogger(__name__)
 
 
 class AvSystem(Protocol):
+    """Contract a wrapper must satisfy.
+
+    Reset and Step MUST return the matching response dataclass — no
+    `None`, no bare `ControlCommand` shortcut. Anything else surfaces
+    as gRPC INTERNAL since it's a wrapper-side contract bug, not a
+    runtime failure the client can recover from.
+    """
+
     def init(self, request: InitRequest) -> None: ...
 
-    def reset(self, request: ResetRequest) -> ControlCommand | ResetResponse: ...
+    def reset(self, request: ResetRequest) -> ResetResponse: ...
 
-    def step(self, request: StepRequest) -> ControlCommand | StepResponse: ...
+    def step(self, request: StepRequest) -> StepResponse: ...
 
     def stop(self) -> None: ...
 
@@ -117,10 +124,7 @@ class GenericAvService(BaseAvServer):
 
             reset_request = reset_request_from_proto(request)
             try:
-                result = self._av_system.reset(reset_request)
-                response = (
-                    result if isinstance(result, ResetResponse) else ResetResponse(ctrl_cmd=result)
-                )
+                response = self._av_system.reset(reset_request)
             except AvUnavailable as exc:
                 return self._unavailable(
                     context,
@@ -151,6 +155,18 @@ class GenericAvService(BaseAvServer):
                     av_server_pb2.AvServerMessages.ResetResponse(),
                 )
 
+            if not isinstance(response, ResetResponse):
+                # Wrapper contract bug — surfaces as INTERNAL so the
+                # client knows it's not their fault. Includes the
+                # offending type to make the wrapper test easy.
+                return self._internal_error(
+                    context,
+                    (
+                        f"{self._name}.reset() must return ResetResponse, "
+                        f"got {type(response).__name__}"
+                    ),
+                    av_server_pb2.AvServerMessages.ResetResponse(),
+                )
             self._reset_done = True
             return reset_response_to_proto(response)
 
@@ -172,10 +188,7 @@ class GenericAvService(BaseAvServer):
 
             step_request = step_request_from_proto(request)
             try:
-                result = self._av_system.step(step_request)
-                response = (
-                    result if isinstance(result, StepResponse) else StepResponse(ctrl_cmd=result)
-                )
+                response = self._av_system.step(step_request)
             except AvUnavailable as exc:
                 return self._unavailable(
                     context,
@@ -202,6 +215,15 @@ class GenericAvService(BaseAvServer):
                     av_server_pb2.AvServerMessages.StepResponse(),
                 )
 
+            if not isinstance(response, StepResponse):
+                return self._internal_error(
+                    context,
+                    (
+                        f"{self._name}.step() must return StepResponse, "
+                        f"got {type(response).__name__}"
+                    ),
+                    av_server_pb2.AvServerMessages.StepResponse(),
+                )
             return step_response_to_proto(response)
 
     def Stop(self, request, context):  # noqa: N802

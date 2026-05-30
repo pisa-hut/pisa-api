@@ -24,7 +24,6 @@ from .types import (
     InitRequest,
     ResetRequest,
     ResetResponse,
-    RuntimeFrameData,
     StepRequest,
     StepResponse,
 )
@@ -33,11 +32,15 @@ logger = logging.getLogger(__name__)
 
 
 class Simulator(Protocol):
+    # Reset and Step MUST return the matching response dataclass — no
+    # `None`, no bare `RuntimeFrameData` shortcut. Anything else surfaces
+    # as gRPC INTERNAL since it's a wrapper-side contract bug.
+
     def init(self, request: InitRequest) -> None: ...
 
-    def reset(self, request: ResetRequest) -> RuntimeFrameData | ResetResponse: ...
+    def reset(self, request: ResetRequest) -> ResetResponse: ...
 
-    def step(self, request: StepRequest) -> RuntimeFrameData | StepResponse: ...
+    def step(self, request: StepRequest) -> StepResponse: ...
 
     def stop(self) -> None: ...
 
@@ -135,10 +138,7 @@ class GenericSimulatorService(BaseSimServer):
 
             reset_request = reset_request_from_proto(request)
             try:
-                result = self._simulator.reset(reset_request)
-                response = (
-                    result if isinstance(result, ResetResponse) else ResetResponse(frame=result)
-                )
+                response = self._simulator.reset(reset_request)
             except (InvalidSimulatorRequest, SimulatorNotReady, RuntimeError) as exc:
                 return self._failed_precondition(
                     context,
@@ -153,6 +153,15 @@ class GenericSimulatorService(BaseSimServer):
                     sim_server_pb2.SimServerMessages.ResetResponse(),
                 )
 
+            if not isinstance(response, ResetResponse):
+                return self._internal_error(
+                    context,
+                    (
+                        f"{self._name}.reset() must return ResetResponse, "
+                        f"got {type(response).__name__}"
+                    ),
+                    sim_server_pb2.SimServerMessages.ResetResponse(),
+                )
             self._reset_done = True
             return reset_response_to_proto(response)
 
@@ -174,10 +183,7 @@ class GenericSimulatorService(BaseSimServer):
 
             step_request = step_request_from_proto(request)
             try:
-                result = self._simulator.step(step_request)
-                response = (
-                    result if isinstance(result, StepResponse) else StepResponse(frame=result)
-                )
+                response = self._simulator.step(step_request)
             except (InvalidSimulatorRequest, SimulatorNotReady, RuntimeError) as exc:
                 return self._failed_precondition(
                     context,
@@ -192,6 +198,15 @@ class GenericSimulatorService(BaseSimServer):
                     sim_server_pb2.SimServerMessages.StepResponse(),
                 )
 
+            if not isinstance(response, StepResponse):
+                return self._internal_error(
+                    context,
+                    (
+                        f"{self._name}.step() must return StepResponse, "
+                        f"got {type(response).__name__}"
+                    ),
+                    sim_server_pb2.SimServerMessages.StepResponse(),
+                )
             return step_response_to_proto(response)
 
     def Stop(self, request, context):  # noqa: N802
