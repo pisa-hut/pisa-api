@@ -217,9 +217,7 @@ def test_reset_invalid_av_request_returns_invalid_argument() -> None:
 
 
 def test_reset_precondition_failed_returns_failed_precondition() -> None:
-    service = GenericAvService(
-        _RaisingAvSystem(AvPreconditionFailed("no route")), name="FakeAV"
-    )
+    service = GenericAvService(_RaisingAvSystem(AvPreconditionFailed("no route")), name="FakeAV")
     service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
