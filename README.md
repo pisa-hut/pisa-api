@@ -117,7 +117,7 @@ justfile                # `just proto` regenerates pb2 + pb2_grpc
 ```bash
 uv sync                              # install dev deps
 uv run pytest                        # full test suite
-uv run pytest tests/test_av_api.py -q::test_reset_av_timeout_returns_deadline_exceeded
+uv run pytest tests/test_av_api.py::test_reset_av_timeout_returns_deadline_exceeded -q
 uv run ruff check                    # lint (generated pb2 stubs are excluded)
 uv run ruff format                   # format
 just proto                           # regenerate Python stubs after editing .proto files

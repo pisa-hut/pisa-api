@@ -331,6 +331,17 @@ def test_stop_dispatches_av_unavailable_to_unavailable() -> None:
     assert service._initialized is False  # type: ignore[attr-defined]
 
 
+def test_stop_dispatches_av_timeout_to_deadline_exceeded() -> None:
+    av_system = FakeAvSystem()
+    service = GenericAvService(av_system, name="FakeAV")
+    service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
+    av_system.stop = lambda: (_ for _ in ()).throw(AvTimeout("teardown slow"))
+    context = FakeContext()
+    service.Stop(av_server_pb2.AvServerMessages.InitRequest(), context)
+    assert context.code == grpc.StatusCode.DEADLINE_EXCEEDED
+    assert service._initialized is False  # type: ignore[attr-defined]
+
+
 def test_close_is_unimplemented() -> None:
     """Close is declared in the proto but the generic server doesn't
     override it. Clients calling Close should hit the auto-generated

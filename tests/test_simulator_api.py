@@ -412,6 +412,17 @@ def test_stop_dispatches_simulator_unavailable_to_unavailable() -> None:
     assert service._initialized is False  # type: ignore[attr-defined]
 
 
+def test_stop_dispatches_simulator_timeout_to_deadline_exceeded() -> None:
+    simulator = FakeSimulator()
+    service = GenericSimulatorService(simulator, name="Fake")
+    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
+    simulator.stop = lambda: (_ for _ in ()).throw(SimulatorTimeout("teardown slow"))
+    context = FakeContext()
+    service.Stop(sim_server_pb2.SimServerMessages.InitRequest(), context)
+    assert context.code == grpc.StatusCode.DEADLINE_EXCEEDED
+    assert service._initialized is False  # type: ignore[attr-defined]
+
+
 def test_close_is_unimplemented_sim() -> None:
     assert "Close" not in GenericSimulatorService.__dict__
 
