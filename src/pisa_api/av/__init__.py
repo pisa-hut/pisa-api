@@ -50,7 +50,7 @@ from .conversions import (
 )
 from .service import (
     AvError,
-    AvNotReady,
+    AvPreconditionFailed,
     AvSystem,
     AvUnavailable,
     GenericAvService,
@@ -88,7 +88,7 @@ from .types import (
 
 __all__ = [
     "AvError",
-    "AvNotReady",
+    "AvPreconditionFailed",
     "AvSystem",
     "AvUnavailable",
     "CollisionInfoData",

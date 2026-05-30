@@ -50,15 +50,15 @@ class AvError(Exception):
 
 
 class InvalidAvRequest(AvError):
-    """Raised when a valid protobuf request is invalid for the AV system."""
+    """Logical request is invalid; do not retry this logical scenario."""
 
 
-class AvNotReady(AvError):
-    """Raised when lifecycle ordering is invalid for the AV system."""
+class AvPreconditionFailed(AvError):
+    """Concrete execution precondition failed; abandon this concrete case."""
 
 
 class AvUnavailable(AvError):
-    """Raised when the AV stack is temporarily unavailable."""
+    """Transient AV/runtime failure; requeue or retry."""
 
 
 class GenericAvService(BaseAvServer):
@@ -125,7 +125,13 @@ class GenericAvService(BaseAvServer):
                     f"Failed to reset {self._name}: {exc}",
                     av_server_pb2.AvServerMessages.ResetResponse(),
                 )
-            except (InvalidAvRequest, AvNotReady, RuntimeError) as exc:
+            except InvalidAvRequest as exc:
+                return self._invalid_argument(
+                    context,
+                    f"Failed to reset {self._name}: {exc}",
+                    av_server_pb2.AvServerMessages.ResetResponse(),
+                )
+            except (AvPreconditionFailed, RuntimeError) as exc:
                 return self._failed_precondition(
                     context,
                     f"Failed to reset {self._name}: {exc}",
@@ -170,7 +176,13 @@ class GenericAvService(BaseAvServer):
                     f"Failed to step {self._name}: {exc}",
                     av_server_pb2.AvServerMessages.StepResponse(),
                 )
-            except (InvalidAvRequest, AvNotReady, RuntimeError) as exc:
+            except InvalidAvRequest as exc:
+                return self._invalid_argument(
+                    context,
+                    f"Failed to step {self._name}: {exc}",
+                    av_server_pb2.AvServerMessages.StepResponse(),
+                )
+            except (AvPreconditionFailed, RuntimeError) as exc:
                 return self._failed_precondition(
                     context,
                     f"Failed to step {self._name}: {exc}",
@@ -228,7 +240,20 @@ class GenericAvService(BaseAvServer):
             self._reset_done = False
 
     @staticmethod
+    def _invalid_argument(context, details: str, response):
+        """Used for InvalidAvRequest: the logical scenario itself is wrong,
+        retrying the same task will fail the same way. Maps to gRPC
+        INVALID_ARGUMENT so simcore can short-circuit instead of looping."""
+        logger.error(details)
+        context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+        context.set_details(details)
+        return response
+
+    @staticmethod
     def _failed_precondition(context, details: str, response):
+        """Used for AvPreconditionFailed (and generic RuntimeError from the
+        wrapper). This concrete is unrunnable but the logical scenario is
+        fine — simcore should skip to the next sampled concrete."""
         logger.error(details)
         context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
         context.set_details(details)
@@ -269,7 +294,7 @@ def _peer(context: Any) -> str:
 
 __all__ = [
     "AvError",
-    "AvNotReady",
+    "AvPreconditionFailed",
     "AvSystem",
     "AvUnavailable",
     "GenericAvService",

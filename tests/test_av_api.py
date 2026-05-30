@@ -4,10 +4,13 @@ import grpc
 
 from pisa_api import av_server_pb2
 from pisa_api.av import (
+    AvPreconditionFailed,
+    AvUnavailable,
     ControlCommand,
     ControlMode,
     GenericAvService,
     InitRequest,
+    InvalidAvRequest,
     ObjectKinematicData,
     ObjectStateData,
     ResetRequest,
@@ -178,6 +181,82 @@ def test_generic_av_service_rejects_step_before_reset() -> None:
     assert response == av_server_pb2.AvServerMessages.StepResponse()
     assert context.code == grpc.StatusCode.FAILED_PRECONDITION
     assert "Reset" in context.details
+
+
+class _RaisingAvSystem(FakeAvSystem):
+    """FakeAvSystem variant that raises a configured exception from
+    Reset/Step so the tests can assert on the gRPC status code routing."""
+
+    def __init__(self, exc: BaseException) -> None:
+        super().__init__()
+        self._exc = exc
+
+    def reset(self, request: ResetRequest) -> ControlCommand:
+        raise self._exc
+
+    def step(self, request: StepRequest) -> ControlCommand:
+        raise self._exc
+
+
+def _init_and_reset(service: GenericAvService) -> None:
+    """Helper: drive the service to the post-reset state so Step is
+    allowed (the early `not _reset_done` branch returns
+    FAILED_PRECONDITION on its own)."""
+    assert service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext()).success
+    service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), FakeContext())
+
+
+def test_reset_invalid_av_request_returns_invalid_argument() -> None:
+    service = GenericAvService(_RaisingAvSystem(InvalidAvRequest("bad logical")), name="FakeAV")
+    assert service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext()).success
+    context = FakeContext()
+    service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
+    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
+
+
+def test_reset_precondition_failed_returns_failed_precondition() -> None:
+    service = GenericAvService(
+        _RaisingAvSystem(AvPreconditionFailed("no route")), name="FakeAV"
+    )
+    assert service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext()).success
+    context = FakeContext()
+    service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
+    assert context.code == grpc.StatusCode.FAILED_PRECONDITION
+
+
+def test_reset_runtime_error_still_failed_precondition() -> None:
+    """Generic RuntimeError keeps the previous "skip this concrete"
+    behaviour — only InvalidAvRequest gets promoted to INVALID_ARGUMENT."""
+    service = GenericAvService(_RaisingAvSystem(RuntimeError("oops")), name="FakeAV")
+    assert service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext()).success
+    context = FakeContext()
+    service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
+    assert context.code == grpc.StatusCode.FAILED_PRECONDITION
+
+
+def test_reset_av_unavailable_returns_unavailable() -> None:
+    service = GenericAvService(_RaisingAvSystem(AvUnavailable("down")), name="FakeAV")
+    assert service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext()).success
+    context = FakeContext()
+    service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
+    assert context.code == grpc.StatusCode.UNAVAILABLE
+
+
+def test_step_invalid_av_request_returns_invalid_argument() -> None:
+    # Use a clean FakeAvSystem so Init + Reset succeed, then monkey-patch
+    # `step` to raise — otherwise Reset would fail and Step would short-
+    # circuit on the "not reset" guard before reaching the step handler.
+    av_system = FakeAvSystem()
+    service = GenericAvService(av_system, name="FakeAV")
+    _init_and_reset(service)
+
+    def _raise(_req):
+        raise InvalidAvRequest("step bad")
+
+    av_system.step = _raise
+    context = FakeContext()
+    service.Step(av_server_pb2.AvServerMessages.StepRequest(), context)
+    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
 
 
 def test_serve_av_system_wraps_existing_serve_av(monkeypatch) -> None:
