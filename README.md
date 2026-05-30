@@ -15,7 +15,7 @@ Or pin in `pyproject.toml` the way every downstream consumer already does:
 ```toml
 [project]
 dependencies = [
-    "pisa-api>=0.2.0",
+    "pisa-api>=0.3.0",
 ]
 
 [tool.uv.sources]
