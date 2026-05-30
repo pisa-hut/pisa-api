@@ -15,7 +15,6 @@ from pisa_api.wrapper import BaseSimServer, serve_sim
 
 from .conversions import (
     init_request_from_proto,
-    init_response_to_proto,
     reset_request_from_proto,
     reset_response_to_proto,
     step_request_from_proto,
@@ -23,7 +22,6 @@ from .conversions import (
 )
 from .types import (
     InitRequest,
-    InitResponse,
     ResetRequest,
     ResetResponse,
     RuntimeFrameData,
@@ -35,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 class Simulator(Protocol):
-    def init(self, request: InitRequest) -> InitResponse | None: ...
+    def init(self, request: InitRequest) -> None: ...
 
     def reset(self, request: ResetRequest) -> RuntimeFrameData | ResetResponse: ...
 
@@ -88,37 +86,42 @@ class GenericSimulatorService(BaseSimServer):
                 and init_request.scenario.format not in self._scenario_formats
             ):
                 supported_formats = ", ".join(sorted(self._scenario_formats))
-                msg = (
-                    f"Unsupported scenario format: {init_request.scenario.format}. "
-                    f"Supported formats: {supported_formats}"
+                # Unsupported format is an INVALID_ARGUMENT — retrying the
+                # same task with the same scenario format won't help.
+                return self._invalid_argument(
+                    context,
+                    (
+                        f"Unsupported scenario format: {init_request.scenario.format}. "
+                        f"Supported formats: {supported_formats}"
+                    ),
+                    Empty(),
                 )
-                logger.error(msg)
-                return sim_server_pb2.SimServerMessages.InitResponse(success=False, msg=msg)
 
             try:
-                result = self._simulator.init(init_request)
+                self._simulator.init(init_request)
             except InvalidSimulatorRequest as exc:
-                logger.error("Invalid init request: %s", exc)
-                return sim_server_pb2.SimServerMessages.InitResponse(success=False, msg=str(exc))
-            except Exception:
-                logger.exception("Failed to initialize %s", self._name)
-                return sim_server_pb2.SimServerMessages.InitResponse(
-                    success=False,
-                    msg=f"Failed to initialize {self._name}",
-                )
-
-            response = result if isinstance(result, InitResponse) else None
-            if response is not None and not response.success:
                 self._initialized = False
                 self._reset_done = False
-                return init_response_to_proto(response)
+                return self._invalid_argument(
+                    context, f"Failed to initialize {self._name}: {exc}", Empty()
+                )
+            except SimulatorNotReady as exc:
+                self._initialized = False
+                self._reset_done = False
+                return self._failed_precondition(
+                    context, f"Failed to initialize {self._name}: {exc}", Empty()
+                )
+            except Exception as exc:
+                logger.exception("Failed to initialize %s", self._name)
+                self._initialized = False
+                self._reset_done = False
+                return self._internal_error(
+                    context, f"Failed to initialize {self._name}: {exc}", Empty()
+                )
 
             self._initialized = True
             self._reset_done = False
-            return sim_server_pb2.SimServerMessages.InitResponse(
-                success=True,
-                msg=(response.msg if response is not None else f"{self._name} initialized"),
-            )
+            return Empty()
 
     def Reset(self, request, context):  # noqa: N802
         logger.debug("Received Reset request from client: %s", _peer(context))
@@ -231,6 +234,16 @@ class GenericSimulatorService(BaseSimServer):
         finally:
             self._initialized = False
             self._reset_done = False
+
+    @staticmethod
+    def _invalid_argument(context, details: str, response):
+        """Used for InvalidSimulatorRequest / unsupported scenario format:
+        the request is logically wrong, retrying with the same payload
+        will fail the same way. Maps to gRPC INVALID_ARGUMENT."""
+        logger.error(details)
+        context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+        context.set_details(details)
+        return response
 
     @staticmethod
     def _failed_precondition(context, details: str, response):

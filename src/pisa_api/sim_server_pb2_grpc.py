@@ -44,7 +44,7 @@ class SimServerStub(object):
         self.Init = channel.unary_unary(
                 '/pisa_api.SimServer/Init',
                 request_serializer=sim__server__pb2.SimServerMessages.InitRequest.SerializeToString,
-                response_deserializer=sim__server__pb2.SimServerMessages.InitResponse.FromString,
+                response_deserializer=empty__pb2.Empty.FromString,
                 _registered_method=True)
         self.Reset = channel.unary_unary(
                 '/pisa_api.SimServer/Reset',
@@ -136,7 +136,7 @@ def add_SimServerServicer_to_server(servicer, server):
             'Init': grpc.unary_unary_rpc_method_handler(
                     servicer.Init,
                     request_deserializer=sim__server__pb2.SimServerMessages.InitRequest.FromString,
-                    response_serializer=sim__server__pb2.SimServerMessages.InitResponse.SerializeToString,
+                    response_serializer=empty__pb2.Empty.SerializeToString,
             ),
             'Reset': grpc.unary_unary_rpc_method_handler(
                     servicer.Reset,
@@ -217,7 +217,7 @@ class SimServer(object):
             target,
             '/pisa_api.SimServer/Init',
             sim__server__pb2.SimServerMessages.InitRequest.SerializeToString,
-            sim__server__pb2.SimServerMessages.InitResponse.FromString,
+            empty__pb2.Empty.FromString,
             options,
             channel_credentials,
             insecure,

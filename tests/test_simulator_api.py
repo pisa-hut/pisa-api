@@ -166,9 +166,10 @@ def test_generic_service_maps_lifecycle_requests_to_dataclass_simulator() -> Non
     init_request.scenario.format = "open_scenario1"
     init_request.dt = 0.05
 
-    init_response = service.Init(init_request, FakeContext())
+    init_context = FakeContext()
+    service.Init(init_request, init_context)
 
-    assert init_response.success
+    assert init_context.code is None
     assert simulator.init_request.config == {"use_viewer": False}
     assert simulator.init_request.output_dir.as_posix() == "/tmp/output"
     assert simulator.init_request.dt == 0.05
@@ -199,9 +200,10 @@ def test_generic_service_accepts_legacy_scenario_format_parameter() -> None:
         scenario_format="open_scenario1",
     )
 
-    response = service.Init(make_init_request("open_scenario1"), FakeContext())
+    context = FakeContext()
+    service.Init(make_init_request("open_scenario1"), context)
 
-    assert response.success
+    assert context.code is None
     assert simulator.init_request.scenario.format == "open_scenario1"
 
 
@@ -213,9 +215,10 @@ def test_generic_service_accepts_multiple_scenario_formats() -> None:
         scenario_formats={"open_scenario1", "open_scenario2"},
     )
 
-    response = service.Init(make_init_request("open_scenario2"), FakeContext())
+    context = FakeContext()
+    service.Init(make_init_request("open_scenario2"), context)
 
-    assert response.success
+    assert context.code is None
     assert simulator.init_request.scenario.format == "open_scenario2"
 
 
@@ -227,11 +230,14 @@ def test_generic_service_rejects_unsupported_scenario_format_with_supported_list
         scenario_formats={"open_scenario2", "open_scenario1"},
     )
 
-    response = service.Init(make_init_request("foo"), FakeContext())
+    context = FakeContext()
+    service.Init(make_init_request("foo"), context)
 
-    assert not response.success
-    assert "Unsupported scenario format: foo" in response.msg
-    assert "Supported formats: open_scenario1, open_scenario2" in response.msg
+    # Unsupported scenario format now surfaces as INVALID_ARGUMENT instead
+    # of the old InitResponse(success=False) protocol-level signal.
+    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
+    assert "Unsupported scenario format: foo" in context.details
+    assert "Supported formats: open_scenario1, open_scenario2" in context.details
     assert simulator.init_request is None
 
 
@@ -254,9 +260,10 @@ def test_generic_service_skips_format_validation_when_no_formats_are_configured(
     simulator = FakeSimulator()
     service = GenericSimulatorService(simulator, name="Fake")
 
-    response = service.Init(make_init_request("custom_format"), FakeContext())
+    context = FakeContext()
+    service.Init(make_init_request("custom_format"), context)
 
-    assert response.success
+    assert context.code is None
     assert simulator.init_request.scenario.format == "custom_format"
 
 
@@ -264,8 +271,9 @@ def test_generic_service_rejects_step_before_reset() -> None:
     simulator = FakeSimulator()
     service = GenericSimulatorService(simulator, name="Fake")
 
-    init_response = service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
-    assert init_response.success
+    init_context = FakeContext()
+    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), init_context)
+    assert init_context.code is None
 
     context = FakeContext()
     response = service.Step(sim_server_pb2.SimServerMessages.StepRequest(), context)

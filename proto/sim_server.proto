@@ -16,7 +16,7 @@ service SimServer {
   rpc Ping(Empty) returns (Pong);
 
   // Initialize the simulation (e.g., load maps, set weather)
-  rpc Init(SimServerMessages.InitRequest) returns (SimServerMessages.InitResponse);
+  rpc Init(SimServerMessages.InitRequest) returns (Empty);
 
   // Reset the simulation with a new scenario
   rpc Reset(SimServerMessages.ResetRequest) returns (SimServerMessages.ResetResponse);
@@ -42,11 +42,6 @@ message SimServerMessages {
     Scenario scenario   = 4;
   }
 
-  message InitResponse {
-    bool   success = 1;
-    string msg     = 2;
-  }
-
   message ResetRequest {
     Path                output_dir    = 1;
     ScenarioPack        scenario_pack = 2;
@@ -67,6 +62,7 @@ message SimServerMessages {
   }
 
   message ShouldQuitResponse {
-    bool should_quit = 1;
+    bool   should_quit = 1;
+    string msg         = 2;
   }
 }

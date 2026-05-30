@@ -36,12 +36,6 @@ class InitRequest:
 
 
 @dataclass(frozen=True)
-class InitResponse:
-    success: bool = False
-    msg: str = ""
-
-
-@dataclass(frozen=True)
 class ResetRequest:
     output_dir: Path = field(default_factory=Path)
     scenario_pack: ScenarioPackData = field(default_factory=ScenarioPackData)
@@ -76,7 +70,6 @@ __all__ = [
     "EgoConfigData",
     "GoalConfigData",
     "InitRequest",
-    "InitResponse",
     "LanePositionData",
     "ObjectKinematicData",
     "ObjectStateData",

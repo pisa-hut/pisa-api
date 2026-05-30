@@ -144,9 +144,10 @@ def test_generic_av_service_maps_lifecycle_requests_to_dataclass_av_system() -> 
     init_request.map_name = "town"
     init_request.dt = 0.05
 
-    init_response = service.Init(init_request, FakeContext())
+    init_context = FakeContext()
+    service.Init(init_request, init_context)
 
-    assert init_response.success
+    assert init_context.code is None  # Init no longer signals via response payload
     assert av_system.init_request.config == {"use_sim_time": True}
     assert av_system.init_request.output_dir.as_posix() == "/tmp/output"
     assert av_system.init_request.map_name == "town"
@@ -172,8 +173,9 @@ def test_generic_av_service_rejects_step_before_reset() -> None:
     av_system = FakeAvSystem()
     service = GenericAvService(av_system, name="FakeAV")
 
-    init_response = service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
-    assert init_response.success
+    init_context = FakeContext()
+    service.Init(av_server_pb2.AvServerMessages.InitRequest(), init_context)
+    assert init_context.code is None
 
     context = FakeContext()
     response = service.Step(av_server_pb2.AvServerMessages.StepRequest(), context)
@@ -202,13 +204,13 @@ def _init_and_reset(service: GenericAvService) -> None:
     """Helper: drive the service to the post-reset state so Step is
     allowed (the early `not _reset_done` branch returns
     FAILED_PRECONDITION on its own)."""
-    assert service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext()).success
+    service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), FakeContext())
 
 
 def test_reset_invalid_av_request_returns_invalid_argument() -> None:
     service = GenericAvService(_RaisingAvSystem(InvalidAvRequest("bad logical")), name="FakeAV")
-    assert service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext()).success
+    service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
     assert context.code == grpc.StatusCode.INVALID_ARGUMENT
@@ -218,7 +220,7 @@ def test_reset_precondition_failed_returns_failed_precondition() -> None:
     service = GenericAvService(
         _RaisingAvSystem(AvPreconditionFailed("no route")), name="FakeAV"
     )
-    assert service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext()).success
+    service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
     assert context.code == grpc.StatusCode.FAILED_PRECONDITION
@@ -228,7 +230,7 @@ def test_reset_runtime_error_still_failed_precondition() -> None:
     """Generic RuntimeError keeps the previous "skip this concrete"
     behaviour — only InvalidAvRequest gets promoted to INVALID_ARGUMENT."""
     service = GenericAvService(_RaisingAvSystem(RuntimeError("oops")), name="FakeAV")
-    assert service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext()).success
+    service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
     assert context.code == grpc.StatusCode.FAILED_PRECONDITION
@@ -236,7 +238,7 @@ def test_reset_runtime_error_still_failed_precondition() -> None:
 
 def test_reset_av_unavailable_returns_unavailable() -> None:
     service = GenericAvService(_RaisingAvSystem(AvUnavailable("down")), name="FakeAV")
-    assert service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext()).success
+    service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
     assert context.code == grpc.StatusCode.UNAVAILABLE

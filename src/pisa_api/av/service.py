@@ -15,7 +15,6 @@ from pisa_api.wrapper import BaseAvServer, serve_av
 
 from .conversions import (
     init_request_from_proto,
-    init_response_to_proto,
     reset_request_from_proto,
     reset_response_to_proto,
     step_request_from_proto,
@@ -23,7 +22,6 @@ from .conversions import (
 )
 from .types import (
     InitRequest,
-    InitResponse,
     ResetRequest,
     ResetResponse,
     StepRequest,
@@ -34,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 class AvSystem(Protocol):
-    def init(self, request: InitRequest) -> InitResponse | None: ...
+    def init(self, request: InitRequest) -> None: ...
 
     def reset(self, request: ResetRequest) -> ControlCommand | ResetResponse: ...
 
@@ -76,32 +74,36 @@ class GenericAvService(BaseAvServer):
         with self._lock:
             init_request = init_request_from_proto(request)
             try:
-                result = self._av_system.init(init_request)
+                self._av_system.init(init_request)
             except InvalidAvRequest as exc:
-                logger.error("Invalid init request: %s", exc)
-                return av_server_pb2.AvServerMessages.InitResponse(success=False, msg=str(exc))
-            except AvUnavailable as exc:
-                logger.error("AV system unavailable during init: %s", exc)
-                return av_server_pb2.AvServerMessages.InitResponse(success=False, msg=str(exc))
-            except Exception:
-                logger.exception("Failed to initialize %s", self._name)
-                return av_server_pb2.AvServerMessages.InitResponse(
-                    success=False,
-                    msg=f"Failed to initialize {self._name}",
-                )
-
-            response = result if isinstance(result, InitResponse) else None
-            if response is not None and not response.success:
                 self._initialized = False
                 self._reset_done = False
-                return init_response_to_proto(response)
+                return self._invalid_argument(
+                    context, f"Failed to initialize {self._name}: {exc}", Empty()
+                )
+            except AvPreconditionFailed as exc:
+                self._initialized = False
+                self._reset_done = False
+                return self._failed_precondition(
+                    context, f"Failed to initialize {self._name}: {exc}", Empty()
+                )
+            except AvUnavailable as exc:
+                self._initialized = False
+                self._reset_done = False
+                return self._unavailable(
+                    context, f"Failed to initialize {self._name}: {exc}", Empty()
+                )
+            except Exception as exc:
+                logger.exception("Failed to initialize %s", self._name)
+                self._initialized = False
+                self._reset_done = False
+                return self._internal_error(
+                    context, f"Failed to initialize {self._name}: {exc}", Empty()
+                )
 
             self._initialized = True
             self._reset_done = False
-            return av_server_pb2.AvServerMessages.InitResponse(
-                success=True,
-                msg=(response.msg if response is not None else f"{self._name} initialized"),
-            )
+            return Empty()
 
     def Reset(self, request, context):  # noqa: N802
         logger.debug("Received Reset request from client: %s", _peer(context))
@@ -132,6 +134,10 @@ class GenericAvService(BaseAvServer):
                     av_server_pb2.AvServerMessages.ResetResponse(),
                 )
             except (AvPreconditionFailed, RuntimeError) as exc:
+                # Symmetric with Step(): a bare RuntimeError from the
+                # wrapper is treated as a per-concrete precondition
+                # failure rather than INTERNAL, so simcore can skip and
+                # try the next sample instead of failing the run.
                 return self._failed_precondition(
                     context,
                     f"Failed to reset {self._name}: {exc}",
