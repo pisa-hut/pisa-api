@@ -215,9 +215,7 @@ class GenericSimulatorService(BaseSimServer):
         context.set_details(details)
         return response
 
-    def _wrong_response_type(
-        self, context, action: str, expected: str, actual: object, response
-    ):
+    def _wrong_response_type(self, context, action: str, expected: str, actual: object, response):
         return self._status(
             context,
             grpc.StatusCode.INTERNAL,

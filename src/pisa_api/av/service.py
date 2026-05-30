@@ -101,9 +101,7 @@ class GenericAvService(BaseAvServer):
             try:
                 self._av_system.init(init_request)
             except Exception as exc:
-                return self._dispatch_exception(
-                    context, "initialize", exc, Empty()
-                )
+                return self._dispatch_exception(context, "initialize", exc, Empty())
 
             self._initialized = True
             return Empty()
@@ -201,9 +199,7 @@ class GenericAvService(BaseAvServer):
         context.set_details(details)
         return response
 
-    def _wrong_response_type(
-        self, context, action: str, expected: str, actual: object, response
-    ):
+    def _wrong_response_type(self, context, action: str, expected: str, actual: object, response):
         return self._status(
             context,
             grpc.StatusCode.INTERNAL,
