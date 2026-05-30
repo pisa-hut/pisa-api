@@ -64,6 +64,11 @@ class AvUnavailable(AvError):
     """Transient AV/runtime failure; requeue or retry."""
 
 
+class AvTimeout(AvError):
+    """AV did not produce a result within the expected deadline.
+    Distinct from `AvUnavailable` — the AV is up, it just took too long."""
+
+
 class GenericAvService(BaseAvServer):
     """Adapter from generated gRPC service methods to dataclass AV hooks."""
 
@@ -74,6 +79,7 @@ class GenericAvService(BaseAvServer):
         InvalidAvRequest: grpc.StatusCode.INVALID_ARGUMENT,
         AvPreconditionFailed: grpc.StatusCode.FAILED_PRECONDITION,
         AvUnavailable: grpc.StatusCode.UNAVAILABLE,
+        AvTimeout: grpc.StatusCode.DEADLINE_EXCEEDED,
     }
 
     def __init__(self, av_system: AvSystem, *, name: str) -> None:
@@ -227,6 +233,7 @@ def _peer(context: Any) -> str:
 __all__ = [
     "AvError",
     "AvPreconditionFailed",
+    "AvTimeout",
     "AvSystem",
     "AvUnavailable",
     "GenericAvService",

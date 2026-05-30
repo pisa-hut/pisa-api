@@ -51,7 +51,9 @@ from .service import (
     InvalidSimulatorRequest,
     Simulator,
     SimulatorError,
-    SimulatorNotReady,
+    SimulatorPreconditionFailed,
+    SimulatorTimeout,
+    SimulatorUnavailable,
     serve_simulator,
 )
 from .types import (
@@ -108,7 +110,9 @@ __all__ = [
     "ShouldQuitResponse",
     "Simulator",
     "SimulatorError",
-    "SimulatorNotReady",
+    "SimulatorPreconditionFailed",
+    "SimulatorTimeout",
+    "SimulatorUnavailable",
     "SpawnConfigData",
     "StepRequest",
     "StepResponse",

@@ -5,6 +5,7 @@ import grpc
 from pisa_api import av_server_pb2
 from pisa_api.av import (
     AvPreconditionFailed,
+    AvTimeout,
     AvUnavailable,
     ControlCommand,
     ControlMode,
@@ -246,6 +247,14 @@ def test_reset_av_unavailable_returns_unavailable() -> None:
     context = FakeContext()
     service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
     assert context.code == grpc.StatusCode.UNAVAILABLE
+
+
+def test_reset_av_timeout_returns_deadline_exceeded() -> None:
+    service = GenericAvService(_RaisingAvSystem(AvTimeout("took too long")), name="FakeAV")
+    service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
+    context = FakeContext()
+    service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
+    assert context.code == grpc.StatusCode.DEADLINE_EXCEEDED
 
 
 def test_reset_returning_none_is_internal_error() -> None:

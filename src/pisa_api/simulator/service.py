@@ -50,15 +50,37 @@ class SimulatorError(Exception):
 
 
 class InvalidSimulatorRequest(SimulatorError):
-    """Raised when a valid protobuf request is invalid for the simulator."""
+    """Logical request is invalid; do not retry this logical scenario."""
 
 
-class SimulatorNotReady(SimulatorError):
-    """Raised when lifecycle ordering is invalid for the simulator."""
+class SimulatorPreconditionFailed(SimulatorError):
+    """Concrete execution precondition failed; abandon this concrete case.
+    (Includes the old `SimulatorNotReady` lifecycle-ordering meaning.)"""
+
+
+class SimulatorUnavailable(SimulatorError):
+    """Transient simulator/runtime failure; requeue or retry."""
+
+
+class SimulatorTimeout(SimulatorError):
+    """Simulator did not produce a result within the expected deadline.
+    Distinct from `SimulatorUnavailable` — the simulator is up, it
+    just took too long."""
 
 
 class GenericSimulatorService(BaseSimServer):
     """Adapter from generated gRPC service methods to dataclass simulator hooks."""
+
+    # Same shape as GenericAvService's table — single source of truth for
+    # "wrapper exception → gRPC status code". RuntimeError is no longer
+    # bundled into FAILED_PRECONDITION; wrappers that want that routing
+    # must raise `SimulatorPreconditionFailed` explicitly.
+    _SIMULATOR_ERROR_TO_STATUS: dict[type[SimulatorError], grpc.StatusCode] = {
+        InvalidSimulatorRequest: grpc.StatusCode.INVALID_ARGUMENT,
+        SimulatorPreconditionFailed: grpc.StatusCode.FAILED_PRECONDITION,
+        SimulatorUnavailable: grpc.StatusCode.UNAVAILABLE,
+        SimulatorTimeout: grpc.StatusCode.DEADLINE_EXCEEDED,
+    }
 
     def __init__(
         self,
@@ -81,16 +103,17 @@ class GenericSimulatorService(BaseSimServer):
     def Init(self, request, context):  # noqa: N802
         logger.debug("Received Init request from client: %s", _peer(context))
         with self._lock:
+            self._initialized = False
+            self._reset_done = False
             init_request = init_request_from_proto(request)
             if (
                 self._scenario_formats is not None
                 and init_request.scenario.format not in self._scenario_formats
             ):
                 supported_formats = ", ".join(sorted(self._scenario_formats))
-                # Unsupported format is an INVALID_ARGUMENT — retrying the
-                # same task with the same scenario format won't help.
-                return self._invalid_argument(
+                return self._status(
                     context,
+                    grpc.StatusCode.INVALID_ARGUMENT,
                     (
                         f"Unsupported scenario format: {init_request.scenario.format}. "
                         f"Supported formats: {supported_formats}"
@@ -100,65 +123,33 @@ class GenericSimulatorService(BaseSimServer):
 
             try:
                 self._simulator.init(init_request)
-            except InvalidSimulatorRequest as exc:
-                self._initialized = False
-                self._reset_done = False
-                return self._invalid_argument(
-                    context, f"Failed to initialize {self._name}: {exc}", Empty()
-                )
-            except SimulatorNotReady as exc:
-                self._initialized = False
-                self._reset_done = False
-                return self._failed_precondition(
-                    context, f"Failed to initialize {self._name}: {exc}", Empty()
-                )
             except Exception as exc:
-                logger.exception("Failed to initialize %s", self._name)
-                self._initialized = False
-                self._reset_done = False
-                return self._internal_error(
-                    context, f"Failed to initialize {self._name}: {exc}", Empty()
-                )
+                return self._dispatch_exception(context, "initialize", exc, Empty())
 
             self._initialized = True
-            self._reset_done = False
             return Empty()
 
     def Reset(self, request, context):  # noqa: N802
         logger.debug("Received Reset request from client: %s", _peer(context))
         with self._lock:
+            empty_response = sim_server_pb2.SimServerMessages.ResetResponse()
             if not self._initialized:
-                return self._failed_precondition(
+                return self._status(
                     context,
+                    grpc.StatusCode.FAILED_PRECONDITION,
                     "Simulator not initialized. Call Init first.",
-                    sim_server_pb2.SimServerMessages.ResetResponse(),
+                    empty_response,
                 )
 
             reset_request = reset_request_from_proto(request)
             try:
                 response = self._simulator.reset(reset_request)
-            except (InvalidSimulatorRequest, SimulatorNotReady, RuntimeError) as exc:
-                return self._failed_precondition(
-                    context,
-                    f"Failed to reset {self._name}: {exc}",
-                    sim_server_pb2.SimServerMessages.ResetResponse(),
-                )
             except Exception as exc:
-                logger.exception("Failed to reset %s", self._name)
-                return self._internal_error(
-                    context,
-                    f"Failed to reset {self._name}: {exc}",
-                    sim_server_pb2.SimServerMessages.ResetResponse(),
-                )
+                return self._dispatch_exception(context, "reset", exc, empty_response)
 
             if not isinstance(response, ResetResponse):
-                return self._internal_error(
-                    context,
-                    (
-                        f"{self._name}.reset() must return ResetResponse, "
-                        f"got {type(response).__name__}"
-                    ),
-                    sim_server_pb2.SimServerMessages.ResetResponse(),
+                return self._wrong_response_type(
+                    context, "reset", "ResetResponse", response, empty_response
                 )
             self._reset_done = True
             return reset_response_to_proto(response)
@@ -166,44 +157,31 @@ class GenericSimulatorService(BaseSimServer):
     def Step(self, request, context):  # noqa: N802
         logger.debug("Received Step request with timestamp_ns=%s", request.timestamp_ns)
         with self._lock:
+            empty_response = sim_server_pb2.SimServerMessages.StepResponse()
             if not self._initialized:
-                return self._failed_precondition(
+                return self._status(
                     context,
+                    grpc.StatusCode.FAILED_PRECONDITION,
                     "Simulator not initialized. Call Init first.",
-                    sim_server_pb2.SimServerMessages.StepResponse(),
+                    empty_response,
                 )
             if not self._reset_done:
-                return self._failed_precondition(
+                return self._status(
                     context,
+                    grpc.StatusCode.FAILED_PRECONDITION,
                     "Simulator not reset. Call Reset before Step.",
-                    sim_server_pb2.SimServerMessages.StepResponse(),
+                    empty_response,
                 )
 
             step_request = step_request_from_proto(request)
             try:
                 response = self._simulator.step(step_request)
-            except (InvalidSimulatorRequest, SimulatorNotReady, RuntimeError) as exc:
-                return self._failed_precondition(
-                    context,
-                    f"Failed to step {self._name}: {exc}",
-                    sim_server_pb2.SimServerMessages.StepResponse(),
-                )
             except Exception as exc:
-                logger.exception("Failed to step %s", self._name)
-                return self._internal_error(
-                    context,
-                    f"Failed to step {self._name}: {exc}",
-                    sim_server_pb2.SimServerMessages.StepResponse(),
-                )
+                return self._dispatch_exception(context, "step", exc, empty_response)
 
             if not isinstance(response, StepResponse):
-                return self._internal_error(
-                    context,
-                    (
-                        f"{self._name}.step() must return StepResponse, "
-                        f"got {type(response).__name__}"
-                    ),
-                    sim_server_pb2.SimServerMessages.StepResponse(),
+                return self._wrong_response_type(
+                    context, "step", "StepResponse", response, empty_response
                 )
             return step_response_to_proto(response)
 
@@ -217,29 +195,35 @@ class GenericSimulatorService(BaseSimServer):
                 should_quit=self._simulator.should_quit()
             )
 
+    # --- Status-code helpers ---
+    # See `GenericAvService` for the dispatch-table rationale.
+
     @staticmethod
-    def _invalid_argument(context, details: str, response):
-        """Used for InvalidSimulatorRequest / unsupported scenario format:
-        the request is logically wrong, retrying with the same payload
-        will fail the same way. Maps to gRPC INVALID_ARGUMENT."""
+    def _status(context, code: grpc.StatusCode, details: str, response):
         logger.error(details)
-        context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+        context.set_code(code)
         context.set_details(details)
         return response
 
-    @staticmethod
-    def _failed_precondition(context, details: str, response):
-        logger.error(details)
-        context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
-        context.set_details(details)
-        return response
-
-    @staticmethod
-    def _internal_error(context, details: str, response):
-        logger.error(details)
+    def _dispatch_exception(self, context, action: str, exc: BaseException, response):
+        details = f"Failed to {action} {self._name}: {exc}"
+        for cls, code in self._SIMULATOR_ERROR_TO_STATUS.items():
+            if isinstance(exc, cls):
+                return self._status(context, code, details, response)
+        logger.exception("Failed to %s %s", action, self._name)
         context.set_code(grpc.StatusCode.INTERNAL)
         context.set_details(details)
         return response
+
+    def _wrong_response_type(
+        self, context, action: str, expected: str, actual: object, response
+    ):
+        return self._status(
+            context,
+            grpc.StatusCode.INTERNAL,
+            f"{self._name}.{action}() must return {expected}, got {type(actual).__name__}",
+            response,
+        )
 
 
 def serve_simulator(
@@ -286,6 +270,8 @@ __all__ = [
     "InvalidSimulatorRequest",
     "Simulator",
     "SimulatorError",
-    "SimulatorNotReady",
+    "SimulatorPreconditionFailed",
+    "SimulatorTimeout",
+    "SimulatorUnavailable",
     "serve_simulator",
 ]

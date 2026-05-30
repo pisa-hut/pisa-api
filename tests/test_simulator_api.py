@@ -9,6 +9,7 @@ from pisa_api.simulator import (
     ControlMode,
     GenericSimulatorService,
     InitRequest,
+    InvalidSimulatorRequest,
     ObjectKinematicData,
     ObjectStateData,
     ResetRequest,
@@ -20,6 +21,9 @@ from pisa_api.simulator import (
     ShapeData,
     ShapeDimensionData,
     ShapeType,
+    SimulatorPreconditionFailed,
+    SimulatorTimeout,
+    SimulatorUnavailable,
     StepRequest,
     StepResponse,
 )
@@ -296,6 +300,73 @@ def test_reset_returning_none_is_internal_error() -> None:
     service.Reset(sim_server_pb2.SimServerMessages.ResetRequest(), context)
     assert context.code == grpc.StatusCode.INTERNAL
     assert "must return ResetResponse" in context.details
+
+
+class _RaisingSimulator(FakeSimulator):
+    """FakeSimulator variant that raises a configured exception from
+    Reset/Step so the tests can assert on the gRPC status code routing."""
+
+    def __init__(self, exc: BaseException) -> None:
+        super().__init__()
+        self._exc = exc
+
+    def reset(self, request: ResetRequest) -> ResetResponse:
+        raise self._exc
+
+    def step(self, request: StepRequest) -> StepResponse:
+        raise self._exc
+
+
+def test_reset_invalid_simulator_request_returns_invalid_argument() -> None:
+    service = GenericSimulatorService(
+        _RaisingSimulator(InvalidSimulatorRequest("bad logical")), name="Fake"
+    )
+    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
+    context = FakeContext()
+    service.Reset(sim_server_pb2.SimServerMessages.ResetRequest(), context)
+    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
+
+
+def test_reset_simulator_precondition_failed_returns_failed_precondition() -> None:
+    service = GenericSimulatorService(
+        _RaisingSimulator(SimulatorPreconditionFailed("no spawn")), name="Fake"
+    )
+    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
+    context = FakeContext()
+    service.Reset(sim_server_pb2.SimServerMessages.ResetRequest(), context)
+    assert context.code == grpc.StatusCode.FAILED_PRECONDITION
+
+
+def test_reset_simulator_unavailable_returns_unavailable() -> None:
+    service = GenericSimulatorService(
+        _RaisingSimulator(SimulatorUnavailable("sim down")), name="Fake"
+    )
+    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
+    context = FakeContext()
+    service.Reset(sim_server_pb2.SimServerMessages.ResetRequest(), context)
+    assert context.code == grpc.StatusCode.UNAVAILABLE
+
+
+def test_reset_simulator_timeout_returns_deadline_exceeded() -> None:
+    service = GenericSimulatorService(
+        _RaisingSimulator(SimulatorTimeout("took too long")), name="Fake"
+    )
+    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
+    context = FakeContext()
+    service.Reset(sim_server_pb2.SimServerMessages.ResetRequest(), context)
+    assert context.code == grpc.StatusCode.DEADLINE_EXCEEDED
+
+
+def test_reset_simulator_runtime_error_is_internal() -> None:
+    """Strict contract: only the typed SimulatorError subclasses get
+    well-known gRPC status codes. A bare RuntimeError from the
+    wrapper is treated as a wrapper bug → INTERNAL, not as a
+    per-concrete precondition failure."""
+    service = GenericSimulatorService(_RaisingSimulator(RuntimeError("oops")), name="Fake")
+    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
+    context = FakeContext()
+    service.Reset(sim_server_pb2.SimServerMessages.ResetRequest(), context)
+    assert context.code == grpc.StatusCode.INTERNAL
 
 
 def test_step_returning_bare_runtime_frame_is_internal_error() -> None:
