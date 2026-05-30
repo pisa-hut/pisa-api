@@ -383,6 +383,50 @@ def test_step_returning_bare_runtime_frame_is_internal_error() -> None:
     assert "must return StepResponse" in context.details
 
 
+def test_stop_clears_initialized_state_on_success_sim() -> None:
+    simulator = FakeSimulator()
+    service = GenericSimulatorService(simulator, name="Fake")
+    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
+    context = FakeContext()
+    service.Stop(sim_server_pb2.SimServerMessages.InitRequest(), context)
+    assert context.code is None
+    assert simulator.stopped is True
+    assert service._initialized is False  # type: ignore[attr-defined]
+
+
+def test_stop_before_init_returns_failed_precondition_sim() -> None:
+    service = GenericSimulatorService(FakeSimulator(), name="Fake")
+    context = FakeContext()
+    service.Stop(sim_server_pb2.SimServerMessages.InitRequest(), context)
+    assert context.code == grpc.StatusCode.FAILED_PRECONDITION
+
+
+def test_stop_dispatches_simulator_unavailable_to_unavailable() -> None:
+    simulator = FakeSimulator()
+    service = GenericSimulatorService(simulator, name="Fake")
+    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
+    simulator.stop = lambda: (_ for _ in ()).throw(SimulatorUnavailable("sim gone"))
+    context = FakeContext()
+    service.Stop(sim_server_pb2.SimServerMessages.InitRequest(), context)
+    assert context.code == grpc.StatusCode.UNAVAILABLE
+    assert service._initialized is False  # type: ignore[attr-defined]
+
+
+def test_stop_dispatches_simulator_timeout_to_deadline_exceeded() -> None:
+    simulator = FakeSimulator()
+    service = GenericSimulatorService(simulator, name="Fake")
+    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
+    simulator.stop = lambda: (_ for _ in ()).throw(SimulatorTimeout("teardown slow"))
+    context = FakeContext()
+    service.Stop(sim_server_pb2.SimServerMessages.InitRequest(), context)
+    assert context.code == grpc.StatusCode.DEADLINE_EXCEEDED
+    assert service._initialized is False  # type: ignore[attr-defined]
+
+
+def test_close_is_unimplemented_sim() -> None:
+    assert "Close" not in GenericSimulatorService.__dict__
+
+
 def test_serve_simulator_wraps_existing_serve_sim(monkeypatch) -> None:
     import pisa_api.simulator.service as service_module
 
