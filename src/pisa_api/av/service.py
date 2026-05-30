@@ -67,6 +67,15 @@ class AvUnavailable(AvError):
 class GenericAvService(BaseAvServer):
     """Adapter from generated gRPC service methods to dataclass AV hooks."""
 
+    # Single source of truth for "wrapper exception → gRPC status code".
+    # Adding a new AvError subclass is a one-line edit here, not a fan-out
+    # across every handler's try/except chain.
+    _AV_ERROR_TO_STATUS: dict[type[AvError], grpc.StatusCode] = {
+        InvalidAvRequest: grpc.StatusCode.INVALID_ARGUMENT,
+        AvPreconditionFailed: grpc.StatusCode.FAILED_PRECONDITION,
+        AvUnavailable: grpc.StatusCode.UNAVAILABLE,
+    }
+
     def __init__(self, av_system: AvSystem, *, name: str) -> None:
         self._name = name
         self._av_system = av_system
@@ -77,89 +86,43 @@ class GenericAvService(BaseAvServer):
     def Init(self, request, context):  # noqa: N802
         logger.debug("Received Init request from client: %s", _peer(context))
         with self._lock:
+            # Pessimistic state reset up-front: any failure path below
+            # returns leaving `_initialized = False`. Only the happy path
+            # at the bottom flips it back to True.
+            self._initialized = False
+            self._reset_done = False
             init_request = init_request_from_proto(request)
             try:
                 self._av_system.init(init_request)
-            except InvalidAvRequest as exc:
-                self._initialized = False
-                self._reset_done = False
-                return self._invalid_argument(
-                    context, f"Failed to initialize {self._name}: {exc}", Empty()
-                )
-            except AvPreconditionFailed as exc:
-                self._initialized = False
-                self._reset_done = False
-                return self._failed_precondition(
-                    context, f"Failed to initialize {self._name}: {exc}", Empty()
-                )
-            except AvUnavailable as exc:
-                self._initialized = False
-                self._reset_done = False
-                return self._unavailable(
-                    context, f"Failed to initialize {self._name}: {exc}", Empty()
-                )
             except Exception as exc:
-                logger.exception("Failed to initialize %s", self._name)
-                self._initialized = False
-                self._reset_done = False
-                return self._internal_error(
-                    context, f"Failed to initialize {self._name}: {exc}", Empty()
+                return self._dispatch_exception(
+                    context, "initialize", exc, Empty()
                 )
 
             self._initialized = True
-            self._reset_done = False
             return Empty()
 
     def Reset(self, request, context):  # noqa: N802
         logger.debug("Received Reset request from client: %s", _peer(context))
         with self._lock:
             if not self._initialized:
-                return self._failed_precondition(
+                return self._status(
                     context,
+                    grpc.StatusCode.FAILED_PRECONDITION,
                     "AV system not initialized. Call Init first.",
                     av_server_pb2.AvServerMessages.ResetResponse(),
                 )
 
             reset_request = reset_request_from_proto(request)
+            empty_response = av_server_pb2.AvServerMessages.ResetResponse()
             try:
                 response = self._av_system.reset(reset_request)
-            except AvUnavailable as exc:
-                return self._unavailable(
-                    context,
-                    f"Failed to reset {self._name}: {exc}",
-                    av_server_pb2.AvServerMessages.ResetResponse(),
-                )
-            except InvalidAvRequest as exc:
-                return self._invalid_argument(
-                    context,
-                    f"Failed to reset {self._name}: {exc}",
-                    av_server_pb2.AvServerMessages.ResetResponse(),
-                )
-            except AvPreconditionFailed as exc:
-                return self._failed_precondition(
-                    context,
-                    f"Failed to reset {self._name}: {exc}",
-                    av_server_pb2.AvServerMessages.ResetResponse(),
-                )
             except Exception as exc:
-                logger.exception("Failed to reset %s", self._name)
-                return self._internal_error(
-                    context,
-                    f"Failed to reset {self._name}: {exc}",
-                    av_server_pb2.AvServerMessages.ResetResponse(),
-                )
+                return self._dispatch_exception(context, "reset", exc, empty_response)
 
             if not isinstance(response, ResetResponse):
-                # Wrapper contract bug — surfaces as INTERNAL so the
-                # client knows it's not their fault. Includes the
-                # offending type to make the wrapper test easy.
-                return self._internal_error(
-                    context,
-                    (
-                        f"{self._name}.reset() must return ResetResponse, "
-                        f"got {type(response).__name__}"
-                    ),
-                    av_server_pb2.AvServerMessages.ResetResponse(),
+                return self._wrong_response_type(
+                    context, "reset", "ResetResponse", response, empty_response
                 )
             self._reset_done = True
             return reset_response_to_proto(response)
@@ -167,56 +130,31 @@ class GenericAvService(BaseAvServer):
     def Step(self, request, context):  # noqa: N802
         logger.debug("Received Step request with timestamp_ns=%s", request.timestamp_ns)
         with self._lock:
+            empty_response = av_server_pb2.AvServerMessages.StepResponse()
             if not self._initialized:
-                return self._failed_precondition(
+                return self._status(
                     context,
+                    grpc.StatusCode.FAILED_PRECONDITION,
                     "AV system not initialized. Call Init first.",
-                    av_server_pb2.AvServerMessages.StepResponse(),
+                    empty_response,
                 )
             if not self._reset_done:
-                return self._failed_precondition(
+                return self._status(
                     context,
+                    grpc.StatusCode.FAILED_PRECONDITION,
                     "AV system not reset. Call Reset before Step.",
-                    av_server_pb2.AvServerMessages.StepResponse(),
+                    empty_response,
                 )
 
             step_request = step_request_from_proto(request)
             try:
                 response = self._av_system.step(step_request)
-            except AvUnavailable as exc:
-                return self._unavailable(
-                    context,
-                    f"Failed to step {self._name}: {exc}",
-                    av_server_pb2.AvServerMessages.StepResponse(),
-                )
-            except InvalidAvRequest as exc:
-                return self._invalid_argument(
-                    context,
-                    f"Failed to step {self._name}: {exc}",
-                    av_server_pb2.AvServerMessages.StepResponse(),
-                )
-            except AvPreconditionFailed as exc:
-                return self._failed_precondition(
-                    context,
-                    f"Failed to step {self._name}: {exc}",
-                    av_server_pb2.AvServerMessages.StepResponse(),
-                )
             except Exception as exc:
-                logger.exception("Failed to step %s", self._name)
-                return self._internal_error(
-                    context,
-                    f"Failed to step {self._name}: {exc}",
-                    av_server_pb2.AvServerMessages.StepResponse(),
-                )
+                return self._dispatch_exception(context, "step", exc, empty_response)
 
             if not isinstance(response, StepResponse):
-                return self._internal_error(
-                    context,
-                    (
-                        f"{self._name}.step() must return StepResponse, "
-                        f"got {type(response).__name__}"
-                    ),
-                    av_server_pb2.AvServerMessages.StepResponse(),
+                return self._wrong_response_type(
+                    context, "step", "StepResponse", response, empty_response
                 )
             return step_response_to_proto(response)
 
@@ -230,41 +168,42 @@ class GenericAvService(BaseAvServer):
                 should_quit=self._av_system.should_quit()
             )
 
+    # --- Status-code helpers ---
+    #
+    # `_status` is the primitive: set code + details, return response.
+    # `_dispatch_exception` maps a raised exception to one of those
+    # codes via the dispatch table; everything not in the table falls
+    # back to INTERNAL.
+    # `_wrong_response_type` is the contract-violation path used when
+    # the wrapper returns something other than the expected dataclass.
+
     @staticmethod
-    def _invalid_argument(context, details: str, response):
-        """Used for InvalidAvRequest: the logical scenario itself is wrong,
-        retrying the same task will fail the same way. Maps to gRPC
-        INVALID_ARGUMENT so simcore can short-circuit instead of looping."""
+    def _status(context, code: grpc.StatusCode, details: str, response):
         logger.error(details)
-        context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+        context.set_code(code)
         context.set_details(details)
         return response
 
-    @staticmethod
-    def _failed_precondition(context, details: str, response):
-        """Used for `AvPreconditionFailed` — this concrete is unrunnable
-        but the logical scenario is fine, simcore should skip to the
-        next sample. Bare `RuntimeError` no longer rides along here; a
-        wrapper that wants this routing must raise `AvPreconditionFailed`
-        explicitly."""
-        logger.error(details)
-        context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
-        context.set_details(details)
-        return response
-
-    @staticmethod
-    def _unavailable(context, details: str, response):
-        logger.error(details)
-        context.set_code(grpc.StatusCode.UNAVAILABLE)
-        context.set_details(details)
-        return response
-
-    @staticmethod
-    def _internal_error(context, details: str, response):
-        logger.error(details)
+    def _dispatch_exception(self, context, action: str, exc: BaseException, response):
+        details = f"Failed to {action} {self._name}: {exc}"
+        for cls, code in self._AV_ERROR_TO_STATUS.items():
+            if isinstance(exc, cls):
+                return self._status(context, code, details, response)
+        # Untyped wrapper bug — keep the full traceback in the log.
+        logger.exception("Failed to %s %s", action, self._name)
         context.set_code(grpc.StatusCode.INTERNAL)
         context.set_details(details)
         return response
+
+    def _wrong_response_type(
+        self, context, action: str, expected: str, actual: object, response
+    ):
+        return self._status(
+            context,
+            grpc.StatusCode.INTERNAL,
+            f"{self._name}.{action}() must return {expected}, got {type(actual).__name__}",
+            response,
+        )
 
 
 def serve_av_system(
