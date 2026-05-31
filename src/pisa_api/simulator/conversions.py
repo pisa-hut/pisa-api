@@ -400,13 +400,16 @@ def step_response_to_proto(response: StepResponse) -> SimServerMessages.StepResp
 def should_quit_response_from_proto(
     response: SimServerMessages.ShouldQuitResponse,
 ) -> ShouldQuitResponse:
-    return ShouldQuitResponse(should_quit=response.should_quit)
+    return ShouldQuitResponse(should_quit=response.should_quit, msg=response.msg)
 
 
 def should_quit_response_to_proto(
     response: ShouldQuitResponse,
 ) -> SimServerMessages.ShouldQuitResponse:
-    return SimServerMessages.ShouldQuitResponse(should_quit=response.should_quit)
+    return SimServerMessages.ShouldQuitResponse(
+        should_quit=response.should_quit,
+        msg=response.msg,
+    )
 
 
 def _dict_from_struct(struct: Struct) -> Dict[str, Any]:

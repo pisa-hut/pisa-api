@@ -95,7 +95,7 @@ Adding a fifth error kind is a one-line edit in `_AV_ERROR_TO_STATUS` / `_SIMULA
 
 ## Wrapper return contract
 
-`reset()` must return `ResetResponse`; `step()` must return `StepResponse`; `init()` must return `None`. Anything else (including `None` from `reset()` / `step()`, or a bare `ControlCommand` / `RuntimeFrameData`) surfaces as gRPC `INTERNAL` with a `must return X, got Y` detail. The previous "wrap a bare type for you" convenience is gone — wrappers wrap explicitly.
+`reset()` must return `ResetResponse`; `step()` must return `StepResponse`; `should_quit()` must return `ShouldQuitResponse`; `init()` and `stop()` must return `None`. Anything else (including `None` from `reset()` / `step()`, a bare `ControlCommand` / `RuntimeFrameData`, or a bare `bool` from `should_quit()`) surfaces as gRPC `INTERNAL` with a `must return X, got Y` detail. The previous "wrap a bare type for you" convenience is gone — wrappers wrap explicitly.
 
 ## Layout
 
@@ -134,5 +134,6 @@ Recent revisions are deliberately incompatible with older wrappers:
 - **`SimulatorNotReady` renamed** to `SimulatorPreconditionFailed` for AV/Sim parity.
 - **`RuntimeError` no longer free-passes.** Used to bundle with `*PreconditionFailed` → `FAILED_PRECONDITION`; now goes to `INTERNAL`. Wrappers must raise the typed exception explicitly.
 - **`Close` not implemented.** `Close` is declared in the proto but the generic server returns `UNIMPLEMENTED` — clients shouldn't rely on it; container-lifecycle teardown is the contract. `Stop` *is* implemented (it raises through the same dispatch table as Reset/Step), so clients can release the AV / simulator between scenarios without rebuilding the wrapper container.
+- **`should_quit()` returns `ShouldQuitResponse`, not `bool`.** The proto's `ShouldQuitResponse.msg` field is now exposed end-to-end, so wrappers can surface *why* they're asking to quit. `return ShouldQuitResponse(should_quit=True, msg="ego stuck")` instead of `return True`. Pre-Init the handler still short-circuits to `should_quit=False, msg=""` without calling the wrapper.
 
 Any wrapper or client (`simcore`, `runner/`, the four AV/Sim wrappers under `wrappers/`) needs updating before it can pull a new `pisa-api` revision.

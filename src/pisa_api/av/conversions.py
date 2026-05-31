@@ -117,13 +117,16 @@ def step_response_to_proto(response: StepResponse) -> AvServerMessages.StepRespo
 def should_quit_response_from_proto(
     response: AvServerMessages.ShouldQuitResponse,
 ) -> ShouldQuitResponse:
-    return ShouldQuitResponse(should_quit=response.should_quit)
+    return ShouldQuitResponse(should_quit=response.should_quit, msg=response.msg)
 
 
 def should_quit_response_to_proto(
     response: ShouldQuitResponse,
 ) -> AvServerMessages.ShouldQuitResponse:
-    return AvServerMessages.ShouldQuitResponse(should_quit=response.should_quit)
+    return AvServerMessages.ShouldQuitResponse(
+        should_quit=response.should_quit,
+        msg=response.msg,
+    )
 
 
 __all__ = [

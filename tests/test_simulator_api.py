@@ -21,6 +21,7 @@ from pisa_api.simulator import (
     ShapeData,
     ShapeDimensionData,
     ShapeType,
+    ShouldQuitResponse,
     SimulatorPreconditionFailed,
     SimulatorTimeout,
     SimulatorUnavailable,
@@ -34,6 +35,8 @@ from pisa_api.simulator.conversions import (
     runtime_frame_to_proto,
     scenario_pack_from_proto,
     scenario_pack_to_proto,
+    should_quit_response_from_proto,
+    should_quit_response_to_proto,
     step_request_from_proto,
     step_request_to_proto,
 )
@@ -75,8 +78,8 @@ class FakeSimulator:
     def stop(self) -> None:
         self.stopped = True
 
-    def should_quit(self) -> bool:
-        return False
+    def should_quit(self) -> ShouldQuitResponse:
+        return ShouldQuitResponse(should_quit=False)
 
 
 def make_init_request(scenario_format: str) -> sim_server_pb2.SimServerMessages.InitRequest:
@@ -421,6 +424,57 @@ def test_stop_dispatches_simulator_timeout_to_deadline_exceeded() -> None:
     service.Stop(sim_server_pb2.SimServerMessages.InitRequest(), context)
     assert context.code == grpc.StatusCode.DEADLINE_EXCEEDED
     assert service._initialized is False  # type: ignore[attr-defined]
+
+
+def test_should_quit_response_round_trips_through_proto_sim() -> None:
+    data = ShouldQuitResponse(should_quit=True, msg="scenario complete")
+    assert should_quit_response_from_proto(should_quit_response_to_proto(data)) == data
+
+
+def test_should_quit_returns_proto_with_msg_when_initialized_sim() -> None:
+    simulator = FakeSimulator()
+    simulator.should_quit = lambda: ShouldQuitResponse(should_quit=True, msg="scenario complete")
+    service = GenericSimulatorService(simulator, name="Fake")
+    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
+    context = FakeContext()
+    resp = service.ShouldQuit(sim_server_pb2.SimServerMessages.InitRequest(), context)
+    assert resp.should_quit is True
+    assert resp.msg == "scenario complete"
+    assert context.code is None
+
+
+def test_should_quit_before_init_returns_false_without_calling_wrapper_sim() -> None:
+    simulator = FakeSimulator()
+    called = []
+    simulator.should_quit = lambda: called.append(True) or ShouldQuitResponse(should_quit=True)  # type: ignore[func-returns-value]
+    service = GenericSimulatorService(simulator, name="Fake")
+    context = FakeContext()
+    resp = service.ShouldQuit(sim_server_pb2.SimServerMessages.InitRequest(), context)
+    assert resp.should_quit is False
+    assert resp.msg == ""
+    assert called == []
+
+
+def test_should_quit_wrong_return_type_is_internal_sim() -> None:
+    simulator = FakeSimulator()
+    simulator.should_quit = lambda: True  # bare bool, not a ShouldQuitResponse
+    service = GenericSimulatorService(simulator, name="Fake")
+    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
+    context = FakeContext()
+    service.ShouldQuit(sim_server_pb2.SimServerMessages.InitRequest(), context)
+    assert context.code == grpc.StatusCode.INTERNAL
+    assert context.details is not None
+    assert "must return ShouldQuitResponse" in context.details
+
+
+def test_should_quit_dispatches_simulator_unavailable_to_unavailable() -> None:
+    simulator = FakeSimulator()
+    service = GenericSimulatorService(simulator, name="Fake")
+    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
+    simulator.should_quit = lambda: (_ for _ in ()).throw(SimulatorUnavailable("sim gone"))
+    context = FakeContext()
+    service.ShouldQuit(sim_server_pb2.SimServerMessages.InitRequest(), context)
+    assert context.code == grpc.StatusCode.UNAVAILABLE
 
 
 def test_close_is_unimplemented_sim() -> None:
