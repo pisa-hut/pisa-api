@@ -61,6 +61,7 @@ class StepResponse:
 @dataclass(frozen=True)
 class ShouldQuitResponse:
     should_quit: bool = False
+    msg: str = ""
 
 
 __all__ = [

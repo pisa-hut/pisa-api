@@ -16,6 +16,7 @@ from .conversions import (
     init_request_from_proto,
     reset_request_from_proto,
     reset_response_to_proto,
+    should_quit_response_to_proto,
     step_request_from_proto,
     step_response_to_proto,
 )
@@ -23,6 +24,7 @@ from .types import (
     InitRequest,
     ResetRequest,
     ResetResponse,
+    ShouldQuitResponse,
     StepRequest,
     StepResponse,
 )
@@ -47,7 +49,7 @@ class AvSystem(Protocol):
 
     def stop(self) -> None: ...
 
-    def should_quit(self) -> bool: ...
+    def should_quit(self) -> ShouldQuitResponse: ...
 
 
 class AvError(Exception):
@@ -192,12 +194,25 @@ class GenericAvService(BaseAvServer):
     def ShouldQuit(self, request, context):  # noqa: N802
         logger.debug("Received ShouldQuit request from client: %s", _peer(context))
         with self._lock:
+            empty_response = av_server_pb2.AvServerMessages.ShouldQuitResponse(should_quit=False)
+            # Polled before Init by some clients to learn whether the
+            # wrapper is ready to receive a scenario; answering "no, and
+            # no message" is more useful than failing the RPC.
             if not self._initialized:
-                return av_server_pb2.AvServerMessages.ShouldQuitResponse(should_quit=False)
+                return empty_response
 
-            return av_server_pb2.AvServerMessages.ShouldQuitResponse(
-                should_quit=self._av_system.should_quit()
-            )
+            try:
+                response = self._av_system.should_quit()
+            except Exception as exc:
+                return self._dispatch_exception(
+                    context, "query should_quit on", exc, empty_response
+                )
+
+            if not isinstance(response, ShouldQuitResponse):
+                return self._wrong_response_type(
+                    context, "should_quit", "ShouldQuitResponse", response, empty_response
+                )
+            return should_quit_response_to_proto(response)
 
     # --- Status-code helpers ---
     #
