@@ -2,16 +2,30 @@ syntax = "proto3";
 
 package pisa_api;
 
-import "object.proto";
 import "google/protobuf/struct.proto";
 
-message CollisionInfo {
-  bool occurred = 1;
+enum ActorRole {
+  ACTOR_ROLE_UNSPECIFIED = 0;
+  EGO = 1;
+  AGENT = 2;
+}
 
-  // Optional actor references if the simulator can provide them.
-  optional int32 actor_a = 2;
-  optional int32 actor_b = 3;
+message ActorRef {
+  // Episode-local identifier; it is not stable across Reset.
+  uint64 tracking_id = 1;
+  optional string entity_name = 2;
+  ActorRole role = 3;
+}
+
+message CollisionInfo {
+  reserved 2, 3;
+
+  bool occurred = 1;
 
   // Optional implementation detail such as impulse or contact normal.
   google.protobuf.Struct details = 4;
+
+  // Message presence represents whether the simulator supplied the actor reference.
+  ActorRef actor_a = 5;
+  ActorRef actor_b = 6;
 }

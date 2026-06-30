@@ -6,12 +6,28 @@ import "object.proto";
 import "collision.proto";
 import "google/protobuf/struct.proto";
 
+// Simulator identities are episode-local and may change after Reset.
+message SimulatorObject {
+  ObjectState state = 1;
+  // May be absent for dynamically created actors without an XOSC entity.
+  optional string entity_name = 2;
+}
+
+message SimulatorEgo {
+  uint64 tracking_id = 1;
+  SimulatorObject object = 2;
+}
+
 message RuntimeFrame {
+  reserved 2;
+  reserved "objects";
+
   int64 sim_time_ns = 1;
-
-  repeated ObjectState objects = 2;
-
   repeated CollisionInfo collision = 3;
-
   google.protobuf.Struct extras = 4;
+
+  // Ego is explicit and must not be inferred from agent map order.
+  SimulatorEgo ego = 5;
+  // Map iteration order is not actor identity; keys are episode-local tracking IDs.
+  map<uint64, SimulatorObject> agents = 6;
 }

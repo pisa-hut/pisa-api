@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any, Dict
 
 from pisa_api.types import (
+    ActorRefData,
+    ActorRole,
     CollisionInfoData,
     ControlCommand,
     ControlMode,
@@ -18,10 +20,13 @@ from pisa_api.types import (
     RuntimeFrameData,
     ScenarioData,
     ScenarioPackData,
+    ShapeCenterPoseData,
     ShapeData,
     ShapeDimensionData,
     ShapeType,
     ShapeVertexData,
+    SimulatorEgoData,
+    SimulatorObjectData,
     SpawnConfigData,
     WorldPositionData,
 )
@@ -65,6 +70,8 @@ class ShouldQuitResponse:
 
 
 __all__ = [
+    "ActorRefData",
+    "ActorRole",
     "CollisionInfoData",
     "ControlCommand",
     "ControlMode",
@@ -82,9 +89,12 @@ __all__ = [
     "ScenarioData",
     "ScenarioPackData",
     "ShapeData",
+    "ShapeCenterPoseData",
     "ShapeDimensionData",
     "ShapeType",
     "ShapeVertexData",
+    "SimulatorEgoData",
+    "SimulatorObjectData",
     "ShouldQuitResponse",
     "SpawnConfigData",
     "StepRequest",

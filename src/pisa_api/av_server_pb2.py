@@ -31,27 +31,31 @@ from . import path_pb2 as path__pb2
 from . import scenario_pb2 as scenario__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0f\x61v_server.proto\x12\x08pisa_api\x1a\x0c\x63onfig.proto\x1a\rcontrol.proto\x1a\x0b\x65mpty.proto\x1a\x0cobject.proto\x1a\npong.proto\x1a\npath.proto\x1a\x0escenario.proto\"\x91\x04\n\x10\x41vServerMessages\x1aq\n\x0bInitRequest\x12 \n\x06\x63onfig\x18\x01 \x01(\x0b\x32\x10.pisa_api.Config\x12\"\n\noutput_dir\x18\x02 \x01(\x0b\x32\x0e.pisa_api.Path\x12\x10\n\x08map_name\x18\x03 \x01(\t\x12\n\n\x02\x64t\x18\x04 \x01(\x01\x1a\x95\x01\n\x0cResetRequest\x12\"\n\noutput_dir\x18\x01 \x01(\x0b\x32\x0e.pisa_api.Path\x12-\n\rscenario_pack\x18\x02 \x01(\x0b\x32\x16.pisa_api.ScenarioPack\x12\x32\n\x13initial_observation\x18\x03 \x03(\x0b\x32\x15.pisa_api.ObjectState\x1a\x34\n\rResetResponse\x12#\n\x08\x63trl_cmd\x18\x01 \x01(\x0b\x32\x11.pisa_api.CtrlCmd\x1aO\n\x0bStepRequest\x12*\n\x0bobservation\x18\x01 \x03(\x0b\x32\x15.pisa_api.ObjectState\x12\x14\n\x0ctimestamp_ns\x18\x02 \x01(\x03\x1a\x33\n\x0cStepResponse\x12#\n\x08\x63trl_cmd\x18\x01 \x01(\x0b\x32\x11.pisa_api.CtrlCmd\x1a\x36\n\x12ShouldQuitResponse\x12\x13\n\x0bshould_quit\x18\x01 \x01(\x08\x12\x0b\n\x03msg\x18\x02 \x01(\t2\xcc\x03\n\x08\x41vServer\x12\'\n\x04Ping\x12\x0f.pisa_api.Empty\x1a\x0e.pisa_api.Pong\x12?\n\x04Init\x12&.pisa_api.AvServerMessages.InitRequest\x1a\x0f.pisa_api.Empty\x12Z\n\x05Reset\x12\'.pisa_api.AvServerMessages.ResetRequest\x1a(.pisa_api.AvServerMessages.ResetResponse\x12W\n\x04Step\x12&.pisa_api.AvServerMessages.StepRequest\x1a\'.pisa_api.AvServerMessages.StepResponse\x12(\n\x04Stop\x12\x0f.pisa_api.Empty\x1a\x0f.pisa_api.Empty\x12)\n\x05\x43lose\x12\x0f.pisa_api.Empty\x1a\x0f.pisa_api.Empty\x12L\n\nShouldQuit\x12\x0f.pisa_api.Empty\x1a-.pisa_api.AvServerMessages.ShouldQuitResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0f\x61v_server.proto\x12\x08pisa_api\x1a\x0c\x63onfig.proto\x1a\rcontrol.proto\x1a\x0b\x65mpty.proto\x1a\x0cobject.proto\x1a\npong.proto\x1a\npath.proto\x1a\x0escenario.proto\"\x89\x01\n\rObservedAgent\x12$\n\x05state\x18\x01 \x01(\x0b\x32\x15.pisa_api.ObjectState\x12\x18\n\x0btracking_id\x18\x02 \x01(\x04H\x00\x88\x01\x01\x12\x18\n\x0b\x65ntity_name\x18\x03 \x01(\tH\x01\x88\x01\x01\x42\x0e\n\x0c_tracking_idB\x0e\n\x0c_entity_name\"Z\n\x0bObservation\x12\"\n\x03\x65go\x18\x01 \x01(\x0b\x32\x15.pisa_api.ObjectState\x12\'\n\x06\x61gents\x18\x02 \x03(\x0b\x32\x17.pisa_api.ObservedAgent\"\x9d\x04\n\x10\x41vServerMessages\x1aq\n\x0bInitRequest\x12 \n\x06\x63onfig\x18\x01 \x01(\x0b\x32\x10.pisa_api.Config\x12\"\n\noutput_dir\x18\x02 \x01(\x0b\x32\x0e.pisa_api.Path\x12\x10\n\x08map_name\x18\x03 \x01(\t\x12\n\n\x02\x64t\x18\x04 \x01(\x01\x1a\x9b\x01\n\x0cResetRequest\x12\"\n\noutput_dir\x18\x01 \x01(\x0b\x32\x0e.pisa_api.Path\x12-\n\rscenario_pack\x18\x02 \x01(\x0b\x32\x16.pisa_api.ScenarioPack\x12\x32\n\x13initial_observation\x18\x04 \x01(\x0b\x32\x15.pisa_api.ObservationJ\x04\x08\x03\x10\x04\x1a\x34\n\rResetResponse\x12#\n\x08\x63trl_cmd\x18\x01 \x01(\x0b\x32\x11.pisa_api.CtrlCmd\x1aU\n\x0bStepRequest\x12*\n\x0bobservation\x18\x03 \x01(\x0b\x32\x15.pisa_api.Observation\x12\x14\n\x0ctimestamp_ns\x18\x02 \x01(\x03J\x04\x08\x01\x10\x02\x1a\x33\n\x0cStepResponse\x12#\n\x08\x63trl_cmd\x18\x01 \x01(\x0b\x32\x11.pisa_api.CtrlCmd\x1a\x36\n\x12ShouldQuitResponse\x12\x13\n\x0bshould_quit\x18\x01 \x01(\x08\x12\x0b\n\x03msg\x18\x02 \x01(\t2\xcc\x03\n\x08\x41vServer\x12\'\n\x04Ping\x12\x0f.pisa_api.Empty\x1a\x0e.pisa_api.Pong\x12?\n\x04Init\x12&.pisa_api.AvServerMessages.InitRequest\x1a\x0f.pisa_api.Empty\x12Z\n\x05Reset\x12\'.pisa_api.AvServerMessages.ResetRequest\x1a(.pisa_api.AvServerMessages.ResetResponse\x12W\n\x04Step\x12&.pisa_api.AvServerMessages.StepRequest\x1a\'.pisa_api.AvServerMessages.StepResponse\x12(\n\x04Stop\x12\x0f.pisa_api.Empty\x1a\x0f.pisa_api.Empty\x12)\n\x05\x43lose\x12\x0f.pisa_api.Empty\x1a\x0f.pisa_api.Empty\x12L\n\nShouldQuit\x12\x0f.pisa_api.Empty\x1a-.pisa_api.AvServerMessages.ShouldQuitResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'av_server_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_AVSERVERMESSAGES']._serialized_start=126
-  _globals['_AVSERVERMESSAGES']._serialized_end=655
-  _globals['_AVSERVERMESSAGES_INITREQUEST']._serialized_start=146
-  _globals['_AVSERVERMESSAGES_INITREQUEST']._serialized_end=259
-  _globals['_AVSERVERMESSAGES_RESETREQUEST']._serialized_start=262
-  _globals['_AVSERVERMESSAGES_RESETREQUEST']._serialized_end=411
-  _globals['_AVSERVERMESSAGES_RESETRESPONSE']._serialized_start=413
-  _globals['_AVSERVERMESSAGES_RESETRESPONSE']._serialized_end=465
-  _globals['_AVSERVERMESSAGES_STEPREQUEST']._serialized_start=467
-  _globals['_AVSERVERMESSAGES_STEPREQUEST']._serialized_end=546
-  _globals['_AVSERVERMESSAGES_STEPRESPONSE']._serialized_start=548
-  _globals['_AVSERVERMESSAGES_STEPRESPONSE']._serialized_end=599
-  _globals['_AVSERVERMESSAGES_SHOULDQUITRESPONSE']._serialized_start=601
-  _globals['_AVSERVERMESSAGES_SHOULDQUITRESPONSE']._serialized_end=655
-  _globals['_AVSERVER']._serialized_start=658
-  _globals['_AVSERVER']._serialized_end=1118
+  _globals['_OBSERVEDAGENT']._serialized_start=126
+  _globals['_OBSERVEDAGENT']._serialized_end=263
+  _globals['_OBSERVATION']._serialized_start=265
+  _globals['_OBSERVATION']._serialized_end=355
+  _globals['_AVSERVERMESSAGES']._serialized_start=358
+  _globals['_AVSERVERMESSAGES']._serialized_end=899
+  _globals['_AVSERVERMESSAGES_INITREQUEST']._serialized_start=378
+  _globals['_AVSERVERMESSAGES_INITREQUEST']._serialized_end=491
+  _globals['_AVSERVERMESSAGES_RESETREQUEST']._serialized_start=494
+  _globals['_AVSERVERMESSAGES_RESETREQUEST']._serialized_end=649
+  _globals['_AVSERVERMESSAGES_RESETRESPONSE']._serialized_start=651
+  _globals['_AVSERVERMESSAGES_RESETRESPONSE']._serialized_end=703
+  _globals['_AVSERVERMESSAGES_STEPREQUEST']._serialized_start=705
+  _globals['_AVSERVERMESSAGES_STEPREQUEST']._serialized_end=790
+  _globals['_AVSERVERMESSAGES_STEPRESPONSE']._serialized_start=792
+  _globals['_AVSERVERMESSAGES_STEPRESPONSE']._serialized_end=843
+  _globals['_AVSERVERMESSAGES_SHOULDQUITRESPONSE']._serialized_start=845
+  _globals['_AVSERVERMESSAGES_SHOULDQUITRESPONSE']._serialized_end=899
+  _globals['_AVSERVER']._serialized_start=902
+  _globals['_AVSERVER']._serialized_end=1362
 # @@protoc_insertion_point(module_scope)

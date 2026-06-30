@@ -6,15 +6,18 @@ from typing import Any, Dict, Optional
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.struct_pb2 import Struct
 
-from pisa_api.collision_pb2 import CollisionInfo
+from pisa_api.av_server_pb2 import Observation, ObservedAgent
+from pisa_api.collision_pb2 import ActorRef, CollisionInfo
 from pisa_api.config_pb2 import Config
 from pisa_api.control_pb2 import CtrlCmd
 from pisa_api.object_pb2 import ObjectKinematic, ObjectState, Shape
 from pisa_api.path_pb2 import Path as PathMessage
 from pisa_api.position_pb2 import LanePosition, Position, WorldPosition
-from pisa_api.runtime_frame_pb2 import RuntimeFrame
+from pisa_api.runtime_frame_pb2 import RuntimeFrame, SimulatorEgo, SimulatorObject
 from pisa_api.scenario_pb2 import EgoConfig, GoalConfig, Scenario, ScenarioPack, SpawnConfig
 from pisa_api.types import (
+    ActorRefData,
+    ActorRole,
     CollisionInfoData,
     ControlCommand,
     ControlMode,
@@ -23,15 +26,20 @@ from pisa_api.types import (
     LanePositionData,
     ObjectKinematicData,
     ObjectStateData,
+    ObservationData,
+    ObservedAgentData,
     PositionData,
     RoadObjectType,
     RuntimeFrameData,
     ScenarioData,
     ScenarioPackData,
+    ShapeCenterPoseData,
     ShapeData,
     ShapeDimensionData,
     ShapeType,
     ShapeVertexData,
+    SimulatorEgoData,
+    SimulatorObjectData,
     SpawnConfigData,
     WorldPositionData,
 )
@@ -251,6 +259,15 @@ def shape_from_proto(shape: Shape) -> ShapeData:
             z=shape.dimensions.z,
         ),
         vertices=[ShapeVertexData(x=vertex.x, y=vertex.y, z=vertex.z) for vertex in shape.vertices],
+        center=ShapeCenterPoseData(
+            x=shape.center.x,
+            y=shape.center.y,
+            z=shape.center.z,
+            roll=shape.center.roll,
+            pitch=shape.center.pitch,
+            yaw=shape.center.yaw,
+        ),
+        reference_point=shape.reference_point,
     )
 
 
@@ -263,6 +280,15 @@ def shape_to_proto(shape: ShapeData) -> Shape:
             z=shape.dimensions.z,
         ),
         vertices=[Shape.Vertex(x=vertex.x, y=vertex.y, z=vertex.z) for vertex in shape.vertices],
+        center=Shape.CenterPose(
+            x=shape.center.x,
+            y=shape.center.y,
+            z=shape.center.z,
+            roll=shape.center.roll,
+            pitch=shape.center.pitch,
+            yaw=shape.center.yaw,
+        ),
+        reference_point=shape.reference_point,
     )
 
 
@@ -287,8 +313,12 @@ def object_state_to_proto(obj: ObjectStateData) -> ObjectState:
 def collision_info_from_proto(collision: CollisionInfo) -> CollisionInfoData:
     return CollisionInfoData(
         occurred=collision.occurred,
-        actor_a=collision.actor_a if _has_field(collision, "actor_a") else None,
-        actor_b=collision.actor_b if _has_field(collision, "actor_b") else None,
+        actor_a=actor_ref_from_proto(collision.actor_a)
+        if _has_field(collision, "actor_a")
+        else None,
+        actor_b=actor_ref_from_proto(collision.actor_b)
+        if _has_field(collision, "actor_b")
+        else None,
         details=_dict_from_struct(collision.details),
     )
 
@@ -299,16 +329,63 @@ def collision_info_to_proto(collision: CollisionInfoData) -> CollisionInfo:
         details=_struct_from_dict(collision.details),
     )
     if collision.actor_a is not None:
-        proto.actor_a = collision.actor_a
+        proto.actor_a.CopyFrom(actor_ref_to_proto(collision.actor_a))
     if collision.actor_b is not None:
-        proto.actor_b = collision.actor_b
+        proto.actor_b.CopyFrom(actor_ref_to_proto(collision.actor_b))
     return proto
+
+
+def actor_ref_from_proto(actor: ActorRef) -> ActorRefData:
+    return ActorRefData(
+        tracking_id=actor.tracking_id,
+        entity_name=actor.entity_name if _has_field(actor, "entity_name") else None,
+        role=ActorRole(actor.role),
+    )
+
+
+def actor_ref_to_proto(actor: ActorRefData) -> ActorRef:
+    proto = ActorRef(tracking_id=actor.tracking_id, role=int(actor.role))
+    if actor.entity_name is not None:
+        proto.entity_name = actor.entity_name
+    return proto
+
+
+def simulator_object_from_proto(obj: SimulatorObject) -> SimulatorObjectData:
+    return SimulatorObjectData(
+        state=object_state_from_proto(obj.state),
+        entity_name=obj.entity_name if _has_field(obj, "entity_name") else None,
+    )
+
+
+def simulator_object_to_proto(obj: SimulatorObjectData) -> SimulatorObject:
+    proto = SimulatorObject(state=object_state_to_proto(obj.state))
+    if obj.entity_name is not None:
+        proto.entity_name = obj.entity_name
+    return proto
+
+
+def simulator_ego_from_proto(ego: SimulatorEgo) -> SimulatorEgoData:
+    return SimulatorEgoData(
+        tracking_id=ego.tracking_id,
+        object=simulator_object_from_proto(ego.object),
+    )
+
+
+def simulator_ego_to_proto(ego: SimulatorEgoData) -> SimulatorEgo:
+    return SimulatorEgo(
+        tracking_id=ego.tracking_id,
+        object=simulator_object_to_proto(ego.object),
+    )
 
 
 def runtime_frame_from_proto(frame: RuntimeFrame) -> RuntimeFrameData:
     return RuntimeFrameData(
         sim_time_ns=frame.sim_time_ns,
-        objects=[object_state_from_proto(obj) for obj in frame.objects],
+        ego=simulator_ego_from_proto(frame.ego),
+        agents={
+            tracking_id: simulator_object_from_proto(obj)
+            for tracking_id, obj in frame.agents.items()
+        },
         collision=[collision_info_from_proto(collision) for collision in frame.collision],
         extras=_dict_from_struct(frame.extras),
     )
@@ -317,9 +394,43 @@ def runtime_frame_from_proto(frame: RuntimeFrame) -> RuntimeFrameData:
 def runtime_frame_to_proto(frame: RuntimeFrameData) -> RuntimeFrame:
     return RuntimeFrame(
         sim_time_ns=frame.sim_time_ns,
-        objects=[object_state_to_proto(obj) for obj in frame.objects],
+        ego=simulator_ego_to_proto(frame.ego),
+        agents={
+            tracking_id: simulator_object_to_proto(obj) for tracking_id, obj in frame.agents.items()
+        },
         collision=[collision_info_to_proto(collision) for collision in frame.collision],
         extras=_struct_from_dict(frame.extras),
+    )
+
+
+def observed_agent_from_proto(agent: ObservedAgent) -> ObservedAgentData:
+    return ObservedAgentData(
+        state=object_state_from_proto(agent.state),
+        tracking_id=agent.tracking_id if _has_field(agent, "tracking_id") else None,
+        entity_name=agent.entity_name if _has_field(agent, "entity_name") else None,
+    )
+
+
+def observed_agent_to_proto(agent: ObservedAgentData) -> ObservedAgent:
+    proto = ObservedAgent(state=object_state_to_proto(agent.state))
+    if agent.tracking_id is not None:
+        proto.tracking_id = agent.tracking_id
+    if agent.entity_name is not None:
+        proto.entity_name = agent.entity_name
+    return proto
+
+
+def observation_from_proto(observation: Observation) -> ObservationData:
+    return ObservationData(
+        ego=object_state_from_proto(observation.ego),
+        agents=[observed_agent_from_proto(agent) for agent in observation.agents],
+    )
+
+
+def observation_to_proto(observation: ObservationData) -> Observation:
+    return Observation(
+        ego=object_state_to_proto(observation.ego),
+        agents=[observed_agent_to_proto(agent) for agent in observation.agents],
     )
 
 
@@ -341,6 +452,8 @@ def _has_field(message: Any, field_name: str) -> bool:
 
 
 __all__ = [
+    "actor_ref_from_proto",
+    "actor_ref_to_proto",
     "collision_info_from_proto",
     "collision_info_to_proto",
     "config_from_proto",
@@ -357,6 +470,10 @@ __all__ = [
     "object_kinematic_to_proto",
     "object_state_from_proto",
     "object_state_to_proto",
+    "observation_from_proto",
+    "observation_to_proto",
+    "observed_agent_from_proto",
+    "observed_agent_to_proto",
     "path_from_proto",
     "path_to_proto",
     "position_from_proto",
@@ -369,6 +486,10 @@ __all__ = [
     "scenario_to_proto",
     "shape_from_proto",
     "shape_to_proto",
+    "simulator_ego_from_proto",
+    "simulator_ego_to_proto",
+    "simulator_object_from_proto",
+    "simulator_object_to_proto",
     "spawn_config_from_proto",
     "spawn_config_to_proto",
     "world_position_from_proto",

@@ -15,7 +15,7 @@ Or pin in `pyproject.toml` the way every downstream consumer already does:
 ```toml
 [project]
 dependencies = [
-    "pisa-api>=0.3.0",
+    "pisa-api>=0.4.0",
 ]
 
 [tool.uv.sources]
@@ -103,7 +103,7 @@ Adding a fifth error kind is a one-line edit in `_AV_ERROR_TO_STATUS` / `_SIMULA
 proto/                  # .proto definitions
 src/pisa_api/
   __init__.py
-  *_pb2.py, *_pb2_grpc.py   # generated; not maintained by hand
+  *_pb2.py, *_pb2.pyi, *_pb2_grpc.py  # generated; not maintained by hand
   av/                       # AvSystem Protocol, dataclasses, conversions, GenericAvService
   simulator/                # mirror for Simulator
   types.py, conversions.py  # shared payload types (ControlCommand, ObjectState, …)
@@ -129,6 +129,10 @@ When a `.proto` changes, **regenerate the stubs in the same commit** as the prot
 
 Recent revisions are deliberately incompatible with older wrappers:
 
+- **Observation identity is explicit.** `RuntimeFrame` carries a dedicated ego and an
+  episode-local tracking-ID map of agents; AV reset/step requests carry an `Observation` with an
+  explicit ego and non-identity-bearing repeated agents. Tracking IDs must not be assumed stable
+  across reset, and `entity_name` can be absent for dynamically created actors.
 - **InitResponse removed.** `Init` returns `Empty`; success/failure is gRPC status only. Old `return InitResponse(success=False, msg=...)` → must `raise` a typed exception instead.
 - **Bare return types rejected.** `return cmd` from `reset()` / `step()` → must be `return ResetResponse(ctrl_cmd=cmd)` / `return StepResponse(...)`.
 - **`SimulatorNotReady` renamed** to `SimulatorPreconditionFailed` for AV/Sim parity.
