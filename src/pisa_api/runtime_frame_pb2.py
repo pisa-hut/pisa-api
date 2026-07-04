@@ -27,13 +27,21 @@ from . import collision_pb2 as collision__pb2
 from google.protobuf import struct_pb2 as google_dot_protobuf_dot_struct__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13runtime_frame.proto\x12\x08pisa_api\x1a\x0cobject.proto\x1a\x0f\x63ollision.proto\x1a\x1cgoogle/protobuf/struct.proto\"\xa0\x01\n\x0cRuntimeFrame\x12\x13\n\x0bsim_time_ns\x18\x01 \x01(\x03\x12&\n\x07objects\x18\x02 \x03(\x0b\x32\x15.pisa_api.ObjectState\x12*\n\tcollision\x18\x03 \x03(\x0b\x32\x17.pisa_api.CollisionInfo\x12\'\n\x06\x65xtras\x18\x04 \x01(\x0b\x32\x17.google.protobuf.Structb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13runtime_frame.proto\x12\x08pisa_api\x1a\x0cobject.proto\x1a\x0f\x63ollision.proto\x1a\x1cgoogle/protobuf/struct.proto\"a\n\x0fSimulatorObject\x12$\n\x05state\x18\x01 \x01(\x0b\x32\x15.pisa_api.ObjectState\x12\x18\n\x0b\x65ntity_name\x18\x02 \x01(\tH\x00\x88\x01\x01\x42\x0e\n\x0c_entity_name\"N\n\x0cSimulatorEgo\x12\x13\n\x0btracking_id\x18\x01 \x01(\x04\x12)\n\x06object\x18\x02 \x01(\x0b\x32\x19.pisa_api.SimulatorObject\"\xaa\x02\n\x0cRuntimeFrame\x12\x13\n\x0bsim_time_ns\x18\x01 \x01(\x03\x12*\n\tcollision\x18\x03 \x03(\x0b\x32\x17.pisa_api.CollisionInfo\x12\'\n\x06\x65xtras\x18\x04 \x01(\x0b\x32\x17.google.protobuf.Struct\x12#\n\x03\x65go\x18\x05 \x01(\x0b\x32\x16.pisa_api.SimulatorEgo\x12\x32\n\x06\x61gents\x18\x06 \x03(\x0b\x32\".pisa_api.RuntimeFrame.AgentsEntry\x1aH\n\x0b\x41gentsEntry\x12\x0b\n\x03key\x18\x01 \x01(\x04\x12(\n\x05value\x18\x02 \x01(\x0b\x32\x19.pisa_api.SimulatorObject:\x02\x38\x01J\x04\x08\x02\x10\x03R\x07objectsb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'runtime_frame_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_RUNTIMEFRAME']._serialized_start=95
-  _globals['_RUNTIMEFRAME']._serialized_end=255
+  _globals['_RUNTIMEFRAME_AGENTSENTRY']._loaded_options = None
+  _globals['_RUNTIMEFRAME_AGENTSENTRY']._serialized_options = b'8\001'
+  _globals['_SIMULATOROBJECT']._serialized_start=94
+  _globals['_SIMULATOROBJECT']._serialized_end=191
+  _globals['_SIMULATOREGO']._serialized_start=193
+  _globals['_SIMULATOREGO']._serialized_end=271
+  _globals['_RUNTIMEFRAME']._serialized_start=274
+  _globals['_RUNTIMEFRAME']._serialized_end=572
+  _globals['_RUNTIMEFRAME_AGENTSENTRY']._serialized_start=485
+  _globals['_RUNTIMEFRAME_AGENTSENTRY']._serialized_end=557
 # @@protoc_insertion_point(module_scope)

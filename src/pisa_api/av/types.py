@@ -2,9 +2,11 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from pisa_api.types import (
+    ActorRefData,
+    ActorRole,
     CollisionInfoData,
     ControlCommand,
     ControlMode,
@@ -13,11 +15,14 @@ from pisa_api.types import (
     LanePositionData,
     ObjectKinematicData,
     ObjectStateData,
+    ObservationData,
+    ObservedAgentData,
     PositionData,
     RoadObjectType,
     RuntimeFrameData,
     ScenarioData,
     ScenarioPackData,
+    ShapeCenterPoseData,
     ShapeData,
     ShapeDimensionData,
     ShapeType,
@@ -39,7 +44,7 @@ class InitRequest:
 class ResetRequest:
     output_dir: Path = field(default_factory=Path)
     scenario_pack: ScenarioPackData = field(default_factory=ScenarioPackData)
-    initial_observation: List[ObjectStateData] = field(default_factory=list)
+    initial_observation: ObservationData = field(default_factory=ObservationData)
 
 
 @dataclass(frozen=True)
@@ -49,7 +54,7 @@ class ResetResponse:
 
 @dataclass(frozen=True)
 class StepRequest:
-    observation: List[ObjectStateData] = field(default_factory=list)
+    observation: ObservationData = field(default_factory=ObservationData)
     timestamp_ns: int = 0
 
 
@@ -65,6 +70,8 @@ class ShouldQuitResponse:
 
 
 __all__ = [
+    "ActorRefData",
+    "ActorRole",
     "CollisionInfoData",
     "ControlCommand",
     "ControlMode",
@@ -74,6 +81,8 @@ __all__ = [
     "LanePositionData",
     "ObjectKinematicData",
     "ObjectStateData",
+    "ObservationData",
+    "ObservedAgentData",
     "PositionData",
     "ResetRequest",
     "ResetResponse",
@@ -82,6 +91,7 @@ __all__ = [
     "ScenarioData",
     "ScenarioPackData",
     "ShapeData",
+    "ShapeCenterPoseData",
     "ShapeDimensionData",
     "ShapeType",
     "ShapeVertexData",

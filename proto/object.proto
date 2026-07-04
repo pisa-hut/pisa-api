@@ -54,6 +54,17 @@ message Shape{
     double z = 3;
   }
   repeated Vertex vertices = 3; // ignored for bounding box and cylinder; list of vertices
+  message CenterPose {
+    double x = 1;
+    double y = 2;
+    double z = 3;
+    double roll = 4;
+    double pitch = 5;
+    double yaw = 6;
+  }
+  // Shape center in the local frame of ObjectKinematic.
+  CenterPose center = 5;
+  string reference_point = 6;
 }
 
 message ObjectState{

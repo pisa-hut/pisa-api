@@ -45,6 +45,12 @@ class ShapeType(IntEnum):
     POLYGON = 2
 
 
+class ActorRole(IntEnum):
+    ACTOR_ROLE_UNSPECIFIED = 0
+    EGO = 1
+    AGENT = 2
+
+
 @dataclass(frozen=True)
 class WorldPositionData:
     x: float = 0.0
@@ -140,10 +146,22 @@ class ShapeVertexData:
 
 
 @dataclass(frozen=True)
+class ShapeCenterPoseData:
+    x: float = 0.0
+    y: float = 0.0
+    z: float = 0.0
+    roll: float = 0.0
+    pitch: float = 0.0
+    yaw: float = 0.0
+
+
+@dataclass(frozen=True)
 class ShapeData:
     type: ShapeType = ShapeType.BOUNDING_BOX
     dimensions: ShapeDimensionData = field(default_factory=ShapeDimensionData)
     vertices: List[ShapeVertexData] = field(default_factory=list)
+    center: ShapeCenterPoseData = field(default_factory=ShapeCenterPoseData)
+    reference_point: str = ""
 
 
 @dataclass(frozen=True)
@@ -154,22 +172,58 @@ class ObjectStateData:
 
 
 @dataclass(frozen=True)
+class ActorRefData:
+    tracking_id: int = 0
+    entity_name: Optional[str] = None
+    role: ActorRole = ActorRole.ACTOR_ROLE_UNSPECIFIED
+
+
+@dataclass(frozen=True)
 class CollisionInfoData:
     occurred: bool = False
-    actor_a: Optional[int] = None
-    actor_b: Optional[int] = None
+    actor_a: Optional[ActorRefData] = None
+    actor_b: Optional[ActorRefData] = None
     details: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class SimulatorObjectData:
+    state: ObjectStateData = field(default_factory=ObjectStateData)
+    entity_name: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class SimulatorEgoData:
+    tracking_id: int = 0
+    object: SimulatorObjectData = field(default_factory=SimulatorObjectData)
 
 
 @dataclass(frozen=True)
 class RuntimeFrameData:
     sim_time_ns: int = 0
-    objects: List[ObjectStateData] = field(default_factory=list)
+    ego: SimulatorEgoData = field(default_factory=SimulatorEgoData)
+    agents: Dict[int, SimulatorObjectData] = field(default_factory=dict)
     collision: List[CollisionInfoData] = field(default_factory=list)
     extras: Dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class ObservedAgentData:
+    state: ObjectStateData = field(default_factory=ObjectStateData)
+    tracking_id: Optional[int] = None
+    entity_name: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class ObservationData:
+    ego: ObjectStateData = field(default_factory=ObjectStateData)
+    # Sequence order is deliberately non-identity-bearing.
+    agents: List[ObservedAgentData] = field(default_factory=list)
+
+
 __all__ = [
+    "ActorRefData",
+    "ActorRole",
     "CollisionInfoData",
     "ControlCommand",
     "ControlMode",
@@ -178,15 +232,20 @@ __all__ = [
     "LanePositionData",
     "ObjectKinematicData",
     "ObjectStateData",
+    "ObservationData",
+    "ObservedAgentData",
     "PositionData",
     "RoadObjectType",
     "RuntimeFrameData",
     "ScenarioData",
     "ScenarioPackData",
     "ShapeData",
+    "ShapeCenterPoseData",
     "ShapeDimensionData",
     "ShapeType",
     "ShapeVertexData",
+    "SimulatorEgoData",
+    "SimulatorObjectData",
     "SpawnConfigData",
     "WorldPositionData",
 ]

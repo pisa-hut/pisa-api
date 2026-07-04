@@ -22,17 +22,20 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-from . import object_pb2 as object__pb2
 from google.protobuf import struct_pb2 as google_dot_protobuf_dot_struct__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0f\x63ollision.proto\x12\x08pisa_api\x1a\x0cobject.proto\x1a\x1cgoogle/protobuf/struct.proto\"\x8f\x01\n\rCollisionInfo\x12\x10\n\x08occurred\x18\x01 \x01(\x08\x12\x14\n\x07\x61\x63tor_a\x18\x02 \x01(\x05H\x00\x88\x01\x01\x12\x14\n\x07\x61\x63tor_b\x18\x03 \x01(\x05H\x01\x88\x01\x01\x12(\n\x07\x64\x65tails\x18\x04 \x01(\x0b\x32\x17.google.protobuf.StructB\n\n\x08_actor_aB\n\n\x08_actor_bb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0f\x63ollision.proto\x12\x08pisa_api\x1a\x1cgoogle/protobuf/struct.proto\"l\n\x08\x41\x63torRef\x12\x13\n\x0btracking_id\x18\x01 \x01(\x04\x12\x18\n\x0b\x65ntity_name\x18\x02 \x01(\tH\x00\x88\x01\x01\x12!\n\x04role\x18\x03 \x01(\x0e\x32\x13.pisa_api.ActorRoleB\x0e\n\x0c_entity_name\"\xa1\x01\n\rCollisionInfo\x12\x10\n\x08occurred\x18\x01 \x01(\x08\x12(\n\x07\x64\x65tails\x18\x04 \x01(\x0b\x32\x17.google.protobuf.Struct\x12#\n\x07\x61\x63tor_a\x18\x05 \x01(\x0b\x32\x12.pisa_api.ActorRef\x12#\n\x07\x61\x63tor_b\x18\x06 \x01(\x0b\x32\x12.pisa_api.ActorRefJ\x04\x08\x02\x10\x03J\x04\x08\x03\x10\x04*;\n\tActorRole\x12\x1a\n\x16\x41\x43TOR_ROLE_UNSPECIFIED\x10\x00\x12\x07\n\x03\x45GO\x10\x01\x12\t\n\x05\x41GENT\x10\x02\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'collision_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_COLLISIONINFO']._serialized_start=74
-  _globals['_COLLISIONINFO']._serialized_end=217
+  _globals['_ACTORROLE']._serialized_start=333
+  _globals['_ACTORROLE']._serialized_end=392
+  _globals['_ACTORREF']._serialized_start=59
+  _globals['_ACTORREF']._serialized_end=167
+  _globals['_COLLISIONINFO']._serialized_start=170
+  _globals['_COLLISIONINFO']._serialized_end=331
 # @@protoc_insertion_point(module_scope)

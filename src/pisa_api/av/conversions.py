@@ -20,6 +20,10 @@ from pisa_api.conversions import (
     object_kinematic_to_proto,
     object_state_from_proto,
     object_state_to_proto,
+    observation_from_proto,
+    observation_to_proto,
+    observed_agent_from_proto,
+    observed_agent_to_proto,
     path_from_proto,
     path_to_proto,
     position_from_proto,
@@ -72,7 +76,7 @@ def reset_request_from_proto(request: AvServerMessages.ResetRequest) -> ResetReq
     return ResetRequest(
         output_dir=Path(request.output_dir.path),
         scenario_pack=scenario_pack_from_proto(request.scenario_pack),
-        initial_observation=[object_state_from_proto(obj) for obj in request.initial_observation],
+        initial_observation=observation_from_proto(request.initial_observation),
     )
 
 
@@ -80,7 +84,7 @@ def reset_request_to_proto(request: ResetRequest) -> AvServerMessages.ResetReque
     return AvServerMessages.ResetRequest(
         output_dir=path_to_proto(request.output_dir),
         scenario_pack=scenario_pack_to_proto(request.scenario_pack),
-        initial_observation=[object_state_to_proto(obj) for obj in request.initial_observation],
+        initial_observation=observation_to_proto(request.initial_observation),
     )
 
 
@@ -94,14 +98,14 @@ def reset_response_to_proto(response: ResetResponse) -> AvServerMessages.ResetRe
 
 def step_request_from_proto(request: AvServerMessages.StepRequest) -> StepRequest:
     return StepRequest(
-        observation=[object_state_from_proto(obj) for obj in request.observation],
+        observation=observation_from_proto(request.observation),
         timestamp_ns=request.timestamp_ns,
     )
 
 
 def step_request_to_proto(request: StepRequest) -> AvServerMessages.StepRequest:
     return AvServerMessages.StepRequest(
-        observation=[object_state_to_proto(obj) for obj in request.observation],
+        observation=observation_to_proto(request.observation),
         timestamp_ns=request.timestamp_ns,
     )
 
@@ -148,6 +152,10 @@ __all__ = [
     "object_kinematic_to_proto",
     "object_state_from_proto",
     "object_state_to_proto",
+    "observation_from_proto",
+    "observation_to_proto",
+    "observed_agent_from_proto",
+    "observed_agent_to_proto",
     "path_from_proto",
     "path_to_proto",
     "position_from_proto",

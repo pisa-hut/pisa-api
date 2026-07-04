@@ -10,6 +10,20 @@ import "pong.proto";
 import "path.proto";
 import "scenario.proto";
 
+message ObservedAgent {
+  ObjectState state = 1;
+  // Identity metadata is optional because an AV may not associate observations.
+  optional uint64 tracking_id = 2;
+  optional string entity_name = 3;
+}
+
+message Observation {
+  // Ego is semantically explicit.
+  ObjectState ego = 1;
+  // Agent order carries no actor identity.
+  repeated ObservedAgent agents = 2;
+}
+
 service AvServer {
   // Check if the server is alive
   rpc Ping(Empty) returns (Pong);
@@ -42,9 +56,11 @@ message AvServerMessages {
   }
 
   message ResetRequest {
+    reserved 3;
+
     Path                 output_dir          = 1;
     ScenarioPack         scenario_pack       = 2;
-    repeated ObjectState initial_observation = 3;
+    Observation          initial_observation = 4;
   }
 
   message ResetResponse {
@@ -52,7 +68,9 @@ message AvServerMessages {
   }
 
   message StepRequest {
-    repeated ObjectState observation  = 1;
+    reserved 1;
+
+    Observation          observation  = 3;
     int64                timestamp_ns = 2;
   }
 

@@ -5,7 +5,6 @@ package pisa_api;
 import "config.proto";
 import "control.proto";
 import "empty.proto";
-import "object.proto";
 import "path.proto";
 import "pong.proto";
 import "scenario.proto";

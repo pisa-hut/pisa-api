@@ -14,6 +14,8 @@ from pisa_api.av import (
     InvalidAvRequest,
     ObjectKinematicData,
     ObjectStateData,
+    ObservationData,
+    ObservedAgentData,
     ResetRequest,
     ResetResponse,
     RoadObjectType,
@@ -101,16 +103,25 @@ def test_av_init_and_observation_requests_round_trip() -> None:
 
     assert init_round_trip == init_data
 
-    observation = [
-        ObjectStateData(
+    agent_state = ObjectStateData(
+        type=RoadObjectType.CAR,
+        kinematic=ObjectKinematicData(time_ns=10, x=1.0, y=2.0),
+        shape=ShapeData(
+            type=ShapeType.BOUNDING_BOX,
+            dimensions=ShapeDimensionData(x=4.0, y=2.0, z=1.5),
+        ),
+    )
+    observation = ObservationData(
+        ego=ObjectStateData(
             type=RoadObjectType.CAR,
-            kinematic=ObjectKinematicData(time_ns=10, x=1.0, y=2.0),
-            shape=ShapeData(
-                type=ShapeType.BOUNDING_BOX,
-                dimensions=ShapeDimensionData(x=4.0, y=2.0, z=1.5),
-            ),
-        )
-    ]
+            kinematic=ObjectKinematicData(time_ns=10, x=0.0, y=0.0),
+        ),
+        agents=[
+            ObservedAgentData(state=agent_state),
+            ObservedAgentData(state=agent_state, tracking_id=0),
+            ObservedAgentData(state=agent_state, tracking_id=12, entity_name="npc"),
+        ],
+    )
     reset_proto = reset_request_to_proto(
         ResetRequest(output_dir=Path("run-1"), initial_observation=observation)
     )
@@ -123,6 +134,11 @@ def test_av_init_and_observation_requests_round_trip() -> None:
     assert reset_round_trip.initial_observation == observation
     assert step_round_trip.observation == observation
     assert step_round_trip.timestamp_ns == 123
+    assert not reset_proto.initial_observation.agents[0].HasField("tracking_id")
+    assert not reset_proto.initial_observation.agents[0].HasField("entity_name")
+    assert reset_proto.initial_observation.agents[1].HasField("tracking_id")
+    assert reset_proto.initial_observation.agents[1].tracking_id == 0
+    assert reset_proto.initial_observation.agents[2].HasField("entity_name")
 
 
 def test_av_control_responses_round_trip() -> None:
@@ -162,13 +178,13 @@ def test_generic_av_service_maps_lifecycle_requests_to_dataclass_av_system() -> 
 
     reset_request = av_server_pb2.AvServerMessages.ResetRequest()
     reset_request.output_dir.path = "run-1"
-    reset_request.initial_observation.add(type=int(RoadObjectType.CAR))
+    reset_request.initial_observation.ego.type = int(RoadObjectType.CAR)
 
     reset_response = service.Reset(reset_request, FakeContext())
 
     assert reset_response.ctrl_cmd.mode == int(ControlMode.ACKERMANN)
     assert av_system.reset_request.output_dir.as_posix() == "run-1"
-    assert av_system.reset_request.initial_observation[0].type == RoadObjectType.CAR
+    assert av_system.reset_request.initial_observation.ego.type == RoadObjectType.CAR
 
     step_request = av_server_pb2.AvServerMessages.StepRequest(timestamp_ns=123)
     step_response = service.Step(step_request, FakeContext())

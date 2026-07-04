@@ -4,6 +4,8 @@ import grpc
 
 from pisa_api import sim_server_pb2
 from pisa_api.simulator import (
+    ActorRefData,
+    ActorRole,
     CollisionInfoData,
     ControlCommand,
     ControlMode,
@@ -18,10 +20,13 @@ from pisa_api.simulator import (
     RuntimeFrameData,
     ScenarioData,
     ScenarioPackData,
+    ShapeCenterPoseData,
     ShapeData,
     ShapeDimensionData,
     ShapeType,
     ShouldQuitResponse,
+    SimulatorEgoData,
+    SimulatorObjectData,
     SimulatorPreconditionFailed,
     SimulatorTimeout,
     SimulatorUnavailable,
@@ -129,24 +134,45 @@ def test_scenario_pack_conversion_preserves_optional_fields() -> None:
     assert round_trip == pack
 
 
-def test_runtime_frame_conversion_preserves_objects_collision_and_extras() -> None:
+def test_runtime_frame_conversion_preserves_identity_shapes_collision_and_extras() -> None:
+    ego_state = ObjectStateData(
+        type=RoadObjectType.CAR,
+        kinematic=ObjectKinematicData(time_ns=10, x=1.0, y=2.0, speed=3.0),
+        shape=ShapeData(
+            type=ShapeType.BOUNDING_BOX,
+            dimensions=ShapeDimensionData(x=4.0, y=2.0, z=1.5),
+            center=ShapeCenterPoseData(
+                x=1.0,
+                y=0.5,
+                z=0.25,
+                roll=0.1,
+                pitch=0.2,
+                yaw=0.3,
+            ),
+            reference_point="rear_axle",
+        ),
+    )
     frame = RuntimeFrameData(
         sim_time_ns=10,
-        objects=[
-            ObjectStateData(
-                type=RoadObjectType.CAR,
-                kinematic=ObjectKinematicData(time_ns=10, x=1.0, y=2.0, speed=3.0),
-                shape=ShapeData(
-                    type=ShapeType.BOUNDING_BOX,
-                    dimensions=ShapeDimensionData(x=4.0, y=2.0, z=1.5),
-                ),
+        ego=SimulatorEgoData(
+            tracking_id=7,
+            object=SimulatorObjectData(state=ego_state, entity_name="Ego"),
+        ),
+        agents={
+            9: SimulatorObjectData(
+                state=ObjectStateData(type=RoadObjectType.PEDESTRIAN),
+                entity_name=None,
             )
-        ],
+        },
         collision=[
             CollisionInfoData(
                 occurred=True,
-                actor_a=0,
-                actor_b=2,
+                actor_a=ActorRefData(
+                    tracking_id=7,
+                    entity_name="Ego",
+                    role=ActorRole.EGO,
+                ),
+                actor_b=ActorRefData(tracking_id=9, role=ActorRole.AGENT),
                 details={"source": "test"},
             )
         ],
@@ -156,9 +182,27 @@ def test_runtime_frame_conversion_preserves_objects_collision_and_extras() -> No
     proto = runtime_frame_to_proto(frame)
     round_trip = runtime_frame_from_proto(proto)
 
-    assert proto.objects[0].HasField("shape")
+    assert proto.ego.object.state.HasField("shape")
+    assert proto.ego.object.HasField("entity_name")
+    assert not proto.agents[9].HasField("entity_name")
     assert proto.collision[0].HasField("actor_a")
+    assert not proto.collision[0].actor_b.HasField("entity_name")
     assert round_trip == frame
+
+
+def test_simulator_optional_entity_name_preserves_present_empty_string() -> None:
+    frame = RuntimeFrameData(
+        ego=SimulatorEgoData(object=SimulatorObjectData(entity_name="")),
+        agents={1: SimulatorObjectData(entity_name=None)},
+    )
+
+    proto = runtime_frame_to_proto(frame)
+    round_trip = runtime_frame_from_proto(proto)
+
+    assert proto.ego.object.HasField("entity_name")
+    assert not proto.agents[1].HasField("entity_name")
+    assert round_trip.ego.object.entity_name == ""
+    assert round_trip.agents[1].entity_name is None
 
 
 def test_generic_service_maps_lifecycle_requests_to_dataclass_simulator() -> None:
