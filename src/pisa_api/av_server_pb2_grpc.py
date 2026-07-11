@@ -5,6 +5,7 @@ import warnings
 
 from . import av_server_pb2 as av__server__pb2
 from . import empty_pb2 as empty__pb2
+from . import initialization_pb2 as initialization__pb2
 from . import pong_pb2 as pong__pb2
 
 GRPC_GENERATED_VERSION = '1.70.0'
@@ -44,7 +45,7 @@ class AvServerStub(object):
         self.Init = channel.unary_unary(
                 '/pisa_api.AvServer/Init',
                 request_serializer=av__server__pb2.AvServerMessages.InitRequest.SerializeToString,
-                response_deserializer=empty__pb2.Empty.FromString,
+                response_deserializer=initialization__pb2.InitResponse.FromString,
                 _registered_method=True)
         self.Reset = channel.unary_unary(
                 '/pisa_api.AvServer/Reset',
@@ -136,7 +137,7 @@ def add_AvServerServicer_to_server(servicer, server):
             'Init': grpc.unary_unary_rpc_method_handler(
                     servicer.Init,
                     request_deserializer=av__server__pb2.AvServerMessages.InitRequest.FromString,
-                    response_serializer=empty__pb2.Empty.SerializeToString,
+                    response_serializer=initialization__pb2.InitResponse.SerializeToString,
             ),
             'Reset': grpc.unary_unary_rpc_method_handler(
                     servicer.Reset,
@@ -217,7 +218,7 @@ class AvServer(object):
             target,
             '/pisa_api.AvServer/Init',
             av__server__pb2.AvServerMessages.InitRequest.SerializeToString,
-            empty__pb2.Empty.FromString,
+            initialization__pb2.InitResponse.FromString,
             options,
             channel_credentials,
             insecure,

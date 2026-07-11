@@ -5,6 +5,7 @@ package pisa_api;
 import "config.proto";
 import "control.proto";
 import "empty.proto";
+import "initialization.proto";
 import "object.proto";
 import "pong.proto";
 import "path.proto";
@@ -29,7 +30,7 @@ service AvServer {
   rpc Ping(Empty) returns (Pong);
 
   // Initialize the AV system with configuration parameters
-  rpc Init(AvServerMessages.InitRequest) returns (Empty);
+  rpc Init(AvServerMessages.InitRequest) returns (InitResponse);
 
   // Reset the AV system with a new scenario and initial observation
   rpc Reset(AvServerMessages.ResetRequest) returns (AvServerMessages.ResetResponse);

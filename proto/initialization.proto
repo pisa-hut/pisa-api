@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package pisa_api;
+
+import "google/protobuf/struct.proto";
+
+// Describes the component successfully selected and initialized by a
+// wrapper after resolving the Init request and configuration.
+message InitResponse {
+  // Canonical identifier of the initialized component.
+  //
+  // AV examples: "plant2", "interfuser", "lmdrive".
+  // Simulator example: "carla".
+  string name = 1;
+
+  // Effective initialization details useful for reproducibility,
+  // diagnostics, and subsequent analysis.
+  //
+  // The concrete schema is owned by the wrapper. Values must be
+  // representable by google.protobuf.Struct.
+  google.protobuf.Struct metadata = 2;
+}

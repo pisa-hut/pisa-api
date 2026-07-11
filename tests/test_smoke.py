@@ -24,6 +24,7 @@ def test_core_pb2_modules_import() -> None:
         config_pb2,
         control_pb2,
         empty_pb2,
+        initialization_pb2,
         object_pb2,
         path_pb2,
         pong_pb2,

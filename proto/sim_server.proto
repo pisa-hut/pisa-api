@@ -5,6 +5,7 @@ package pisa_api;
 import "config.proto";
 import "control.proto";
 import "empty.proto";
+import "initialization.proto";
 import "path.proto";
 import "pong.proto";
 import "scenario.proto";
@@ -15,7 +16,7 @@ service SimServer {
   rpc Ping(Empty) returns (Pong);
 
   // Initialize the simulation (e.g., load maps, set weather)
-  rpc Init(SimServerMessages.InitRequest) returns (Empty);
+  rpc Init(SimServerMessages.InitRequest) returns (InitResponse);
 
   // Reset the simulation with a new scenario
   rpc Reset(SimServerMessages.ResetRequest) returns (SimServerMessages.ResetResponse);

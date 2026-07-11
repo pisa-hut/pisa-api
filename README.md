@@ -15,7 +15,7 @@ Or pin in `pyproject.toml` the way every downstream consumer already does:
 ```toml
 [project]
 dependencies = [
-    "pisa-api>=0.4.0",
+    "pisa-api>=0.4.1",
 ]
 
 [tool.uv.sources]
@@ -48,6 +48,7 @@ from pisa_api.av import (
     AvTimeout,
     AvUnavailable,
     InvalidAvRequest,
+    InitRequest, InitResponse,
     ResetRequest, ResetResponse,
     StepRequest, StepResponse,
     serve_av_system,
@@ -56,10 +57,20 @@ from pisa_api.types import ControlCommand, ControlMode
 
 
 class MyAv:
-    def init(self, request) -> None:
+    def init(self, request: InitRequest) -> InitResponse:
         # Raise InvalidAvRequest / AvUnavailable / AvTimeout on failure.
-        # Returning None on success is the contract.
-        ...
+        # initialize...
+        self._agent_name = "plant2"
+        self._server_version = "0.9.15"
+        return InitResponse(
+            name=self._agent_name,
+            metadata={
+                "profile": self._agent_name,
+                "runtime": {
+                    "carla_version": self._server_version or "unknown",
+                },
+            },
+        )
 
     def reset(self, request: ResetRequest) -> ResetResponse:
         cmd = ControlCommand(mode=ControlMode.ACKERMANN, payload={"speed": 0.0})
@@ -74,7 +85,12 @@ class MyAv:
 
 
 if __name__ == "__main__":
-    serve_av_system(MyAv(), name="my-av", port=50051)
+    serve_av_system(
+        MyAv(),
+        name="pcla-wrapper",
+        version="0.3.1",
+        port=50051,
+    )
 ```
 
 The simulator side is symmetric (`Simulator` / `serve_simulator` / `StepResponse(frame=...)` etc.).
@@ -95,7 +111,20 @@ Adding a fifth error kind is a one-line edit in `_AV_ERROR_TO_STATUS` / `_SIMULA
 
 ## Wrapper return contract
 
-`reset()` must return `ResetResponse`; `step()` must return `StepResponse`; `should_quit()` must return `ShouldQuitResponse`; `init()` and `stop()` must return `None`. Anything else (including `None` from `reset()` / `step()`, a bare `ControlCommand` / `RuntimeFrameData`, or a bare `bool` from `should_quit()`) surfaces as gRPC `INTERNAL` with a `must return X, got Y` detail. The previous "wrap a bare type for you" convenience is gone — wrappers wrap explicitly.
+`init()` must return the shared `InitResponse`; `reset()` must return `ResetResponse`; `step()` must return `StepResponse`; `should_quit()` must return `ShouldQuitResponse`; and `stop()` returns `None`. Anything else (including `None` from `init()` / `reset()` / `step()`, a bare `ControlCommand` / `RuntimeFrameData`, or a bare `bool` from `should_quit()`) surfaces as gRPC `INTERNAL` with a `must return X, got Y` detail. The previous "wrap a bare type for you" convenience is gone — wrappers wrap explicitly.
+
+## Wrapper and component identity
+
+Ping and Init describe two deliberately different identities:
+
+- `Pong.name` is the stable wrapper identity explicitly passed to the serve API, for example `pcla-wrapper`.
+- `Pong.version` is that wrapper package or build version, for example `0.3.1`.
+- `InitResponse.name` is the component actually selected and initialized for this request, for example `plant2`, `interfuser`, `lmdrive`, or `carla`.
+- `InitResponse.metadata` contains effective configuration and runtime details after initialization.
+
+Clients must use `Pong.name` and `Pong.version` directly rather than parsing the human-readable `Pong.msg`. Both identity arguments are required, must be strings, and cannot be empty or whitespace. The API does not inspect package metadata, project files, wrapper classes, modules, or source paths to infer them.
+
+`InitResponse.metadata` is encoded as `google.protobuf.Struct`. Keys must be strings; values are limited to null, bool, number, string, list, and object. Arbitrary Python objects are unsupported. Protobuf numbers are doubles, so wrappers should encode large integers as strings when exact preservation matters. The runner writes this metadata into the execution manifest: wrappers must never include passwords, tokens, credentials, or other secrets.
 
 ## Layout
 
@@ -133,7 +162,8 @@ Recent revisions are deliberately incompatible with older wrappers:
   episode-local tracking-ID map of agents; AV reset/step requests carry an `Observation` with an
   explicit ego and non-identity-bearing repeated agents. Tracking IDs must not be assumed stable
   across reset, and `entity_name` can be absent for dynamically created actors.
-- **InitResponse removed.** `Init` returns `Empty`; success/failure is gRPC status only. Old `return InitResponse(success=False, msg=...)` → must `raise` a typed exception instead.
+- **InitResponse is now shared and descriptive.** AV and simulator `Init` return the same `pisa_api.types.InitResponse` / protobuf `pisa_api.InitResponse`. It identifies the initialized component and metadata; failures remain gRPC statuses and must be raised as typed exceptions. Returning `None` is now a wrapper contract error.
+- **Wrapper identity is explicit.** `serve_av_system()` and `serve_simulator()` now require keyword-only `name` and `version`; Ping returns both without package or source-path inference.
 - **Bare return types rejected.** `return cmd` from `reset()` / `step()` → must be `return ResetResponse(ctrl_cmd=cmd)` / `return StepResponse(...)`.
 - **`SimulatorNotReady` renamed** to `SimulatorPreconditionFailed` for AV/Sim parity.
 - **`RuntimeError` no longer free-passes.** Used to bundle with `*PreconditionFailed` → `FAILED_PRECONDITION`; now goes to `INTERNAL`. Wrappers must raise the typed exception explicitly.

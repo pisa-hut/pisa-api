@@ -25,13 +25,14 @@ _sym_db = _symbol_database.Default()
 from . import config_pb2 as config__pb2
 from . import control_pb2 as control__pb2
 from . import empty_pb2 as empty__pb2
+from . import initialization_pb2 as initialization__pb2
 from . import path_pb2 as path__pb2
 from . import pong_pb2 as pong__pb2
 from . import scenario_pb2 as scenario__pb2
 from . import runtime_frame_pb2 as runtime__frame__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10sim_server.proto\x12\x08pisa_api\x1a\x0c\x63onfig.proto\x1a\rcontrol.proto\x1a\x0b\x65mpty.proto\x1a\npath.proto\x1a\npong.proto\x1a\x0escenario.proto\x1a\x13runtime_frame.proto\"\xe5\x04\n\x11SimServerMessages\x1a\x85\x01\n\x0bInitRequest\x12 \n\x06\x63onfig\x18\x01 \x01(\x0b\x32\x10.pisa_api.Config\x12\"\n\noutput_dir\x18\x02 \x01(\x0b\x32\x0e.pisa_api.Path\x12\n\n\x02\x64t\x18\x03 \x01(\x01\x12$\n\x08scenario\x18\x04 \x01(\x0b\x32\x12.pisa_api.Scenario\x1a\xd6\x01\n\x0cResetRequest\x12\"\n\noutput_dir\x18\x01 \x01(\x0b\x32\x0e.pisa_api.Path\x12-\n\rscenario_pack\x18\x02 \x01(\x0b\x32\x16.pisa_api.ScenarioPack\x12\x44\n\x06params\x18\x03 \x03(\x0b\x32\x34.pisa_api.SimServerMessages.ResetRequest.ParamsEntry\x1a-\n\x0bParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x1a\x36\n\rResetResponse\x12%\n\x05\x66rame\x18\x01 \x01(\x0b\x32\x16.pisa_api.RuntimeFrame\x1aH\n\x0bStepRequest\x12#\n\x08\x63trl_cmd\x18\x01 \x01(\x0b\x32\x11.pisa_api.CtrlCmd\x12\x14\n\x0ctimestamp_ns\x18\x02 \x01(\x03\x1a\x35\n\x0cStepResponse\x12%\n\x05\x66rame\x18\x01 \x01(\x0b\x32\x16.pisa_api.RuntimeFrame\x1a\x36\n\x12ShouldQuitResponse\x12\x13\n\x0bshould_quit\x18\x01 \x01(\x08\x12\x0b\n\x03msg\x18\x02 \x01(\t2\xd3\x03\n\tSimServer\x12\'\n\x04Ping\x12\x0f.pisa_api.Empty\x1a\x0e.pisa_api.Pong\x12@\n\x04Init\x12\'.pisa_api.SimServerMessages.InitRequest\x1a\x0f.pisa_api.Empty\x12\\\n\x05Reset\x12(.pisa_api.SimServerMessages.ResetRequest\x1a).pisa_api.SimServerMessages.ResetResponse\x12Y\n\x04Step\x12\'.pisa_api.SimServerMessages.StepRequest\x1a(.pisa_api.SimServerMessages.StepResponse\x12(\n\x04Stop\x12\x0f.pisa_api.Empty\x1a\x0f.pisa_api.Empty\x12)\n\x05\x43lose\x12\x0f.pisa_api.Empty\x1a\x0f.pisa_api.Empty\x12M\n\nShouldQuit\x12\x0f.pisa_api.Empty\x1a..pisa_api.SimServerMessages.ShouldQuitResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10sim_server.proto\x12\x08pisa_api\x1a\x0c\x63onfig.proto\x1a\rcontrol.proto\x1a\x0b\x65mpty.proto\x1a\x14initialization.proto\x1a\npath.proto\x1a\npong.proto\x1a\x0escenario.proto\x1a\x13runtime_frame.proto\"\xe5\x04\n\x11SimServerMessages\x1a\x85\x01\n\x0bInitRequest\x12 \n\x06\x63onfig\x18\x01 \x01(\x0b\x32\x10.pisa_api.Config\x12\"\n\noutput_dir\x18\x02 \x01(\x0b\x32\x0e.pisa_api.Path\x12\n\n\x02\x64t\x18\x03 \x01(\x01\x12$\n\x08scenario\x18\x04 \x01(\x0b\x32\x12.pisa_api.Scenario\x1a\xd6\x01\n\x0cResetRequest\x12\"\n\noutput_dir\x18\x01 \x01(\x0b\x32\x0e.pisa_api.Path\x12-\n\rscenario_pack\x18\x02 \x01(\x0b\x32\x16.pisa_api.ScenarioPack\x12\x44\n\x06params\x18\x03 \x03(\x0b\x32\x34.pisa_api.SimServerMessages.ResetRequest.ParamsEntry\x1a-\n\x0bParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x1a\x36\n\rResetResponse\x12%\n\x05\x66rame\x18\x01 \x01(\x0b\x32\x16.pisa_api.RuntimeFrame\x1aH\n\x0bStepRequest\x12#\n\x08\x63trl_cmd\x18\x01 \x01(\x0b\x32\x11.pisa_api.CtrlCmd\x12\x14\n\x0ctimestamp_ns\x18\x02 \x01(\x03\x1a\x35\n\x0cStepResponse\x12%\n\x05\x66rame\x18\x01 \x01(\x0b\x32\x16.pisa_api.RuntimeFrame\x1a\x36\n\x12ShouldQuitResponse\x12\x13\n\x0bshould_quit\x18\x01 \x01(\x08\x12\x0b\n\x03msg\x18\x02 \x01(\t2\xda\x03\n\tSimServer\x12\'\n\x04Ping\x12\x0f.pisa_api.Empty\x1a\x0e.pisa_api.Pong\x12G\n\x04Init\x12\'.pisa_api.SimServerMessages.InitRequest\x1a\x16.pisa_api.InitResponse\x12\\\n\x05Reset\x12(.pisa_api.SimServerMessages.ResetRequest\x1a).pisa_api.SimServerMessages.ResetResponse\x12Y\n\x04Step\x12\'.pisa_api.SimServerMessages.StepRequest\x1a(.pisa_api.SimServerMessages.StepResponse\x12(\n\x04Stop\x12\x0f.pisa_api.Empty\x1a\x0f.pisa_api.Empty\x12)\n\x05\x43lose\x12\x0f.pisa_api.Empty\x1a\x0f.pisa_api.Empty\x12M\n\nShouldQuit\x12\x0f.pisa_api.Empty\x1a..pisa_api.SimServerMessages.ShouldQuitResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -40,22 +41,22 @@ if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_SIMSERVERMESSAGES_RESETREQUEST_PARAMSENTRY']._loaded_options = None
   _globals['_SIMSERVERMESSAGES_RESETREQUEST_PARAMSENTRY']._serialized_options = b'8\001'
-  _globals['_SIMSERVERMESSAGES']._serialized_start=134
-  _globals['_SIMSERVERMESSAGES']._serialized_end=747
-  _globals['_SIMSERVERMESSAGES_INITREQUEST']._serialized_start=156
-  _globals['_SIMSERVERMESSAGES_INITREQUEST']._serialized_end=289
-  _globals['_SIMSERVERMESSAGES_RESETREQUEST']._serialized_start=292
-  _globals['_SIMSERVERMESSAGES_RESETREQUEST']._serialized_end=506
-  _globals['_SIMSERVERMESSAGES_RESETREQUEST_PARAMSENTRY']._serialized_start=461
-  _globals['_SIMSERVERMESSAGES_RESETREQUEST_PARAMSENTRY']._serialized_end=506
-  _globals['_SIMSERVERMESSAGES_RESETRESPONSE']._serialized_start=508
-  _globals['_SIMSERVERMESSAGES_RESETRESPONSE']._serialized_end=562
-  _globals['_SIMSERVERMESSAGES_STEPREQUEST']._serialized_start=564
-  _globals['_SIMSERVERMESSAGES_STEPREQUEST']._serialized_end=636
-  _globals['_SIMSERVERMESSAGES_STEPRESPONSE']._serialized_start=638
-  _globals['_SIMSERVERMESSAGES_STEPRESPONSE']._serialized_end=691
-  _globals['_SIMSERVERMESSAGES_SHOULDQUITRESPONSE']._serialized_start=693
-  _globals['_SIMSERVERMESSAGES_SHOULDQUITRESPONSE']._serialized_end=747
-  _globals['_SIMSERVER']._serialized_start=750
-  _globals['_SIMSERVER']._serialized_end=1217
+  _globals['_SIMSERVERMESSAGES']._serialized_start=156
+  _globals['_SIMSERVERMESSAGES']._serialized_end=769
+  _globals['_SIMSERVERMESSAGES_INITREQUEST']._serialized_start=178
+  _globals['_SIMSERVERMESSAGES_INITREQUEST']._serialized_end=311
+  _globals['_SIMSERVERMESSAGES_RESETREQUEST']._serialized_start=314
+  _globals['_SIMSERVERMESSAGES_RESETREQUEST']._serialized_end=528
+  _globals['_SIMSERVERMESSAGES_RESETREQUEST_PARAMSENTRY']._serialized_start=483
+  _globals['_SIMSERVERMESSAGES_RESETREQUEST_PARAMSENTRY']._serialized_end=528
+  _globals['_SIMSERVERMESSAGES_RESETRESPONSE']._serialized_start=530
+  _globals['_SIMSERVERMESSAGES_RESETRESPONSE']._serialized_end=584
+  _globals['_SIMSERVERMESSAGES_STEPREQUEST']._serialized_start=586
+  _globals['_SIMSERVERMESSAGES_STEPREQUEST']._serialized_end=658
+  _globals['_SIMSERVERMESSAGES_STEPRESPONSE']._serialized_start=660
+  _globals['_SIMSERVERMESSAGES_STEPRESPONSE']._serialized_end=713
+  _globals['_SIMSERVERMESSAGES_SHOULDQUITRESPONSE']._serialized_start=715
+  _globals['_SIMSERVERMESSAGES_SHOULDQUITRESPONSE']._serialized_end=769
+  _globals['_SIMSERVER']._serialized_start=772
+  _globals['_SIMSERVER']._serialized_end=1246
 # @@protoc_insertion_point(module_scope)

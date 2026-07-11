@@ -1,5 +1,7 @@
 """Simulator-friendly API built on top of the generated SimServer protobufs."""
 
+from pisa_api.types import InitResponse
+
 from .conversions import (
     actor_ref_from_proto,
     actor_ref_to_proto,
@@ -105,6 +107,7 @@ __all__ = [
     "GenericSimulatorService",
     "GoalConfigData",
     "InitRequest",
+    "InitResponse",
     "InvalidSimulatorRequest",
     "LanePositionData",
     "ObjectKinematicData",
