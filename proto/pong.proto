@@ -2,4 +2,16 @@ syntax = "proto3";
 
 package pisa_api;
 
-message Pong { string msg = 1; }
+// Identity and health information for the wrapper serving this request.
+message Pong {
+  // Human-readable health message.
+  string msg = 1;
+
+  // Stable wrapper identifier supplied by the wrapper.
+  // Example: "pcla-wrapper".
+  string name = 2;
+
+  // Wrapper version supplied by the wrapper.
+  // Example: "0.3.1".
+  string version = 3;
+}

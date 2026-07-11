@@ -10,6 +10,7 @@ from pisa_api.av_server_pb2 import Observation, ObservedAgent
 from pisa_api.collision_pb2 import ActorRef, CollisionInfo
 from pisa_api.config_pb2 import Config
 from pisa_api.control_pb2 import CtrlCmd
+from pisa_api.initialization_pb2 import InitResponse as InitResponseMessage
 from pisa_api.object_pb2 import ObjectKinematic, ObjectState, Shape
 from pisa_api.path_pb2 import Path as PathMessage
 from pisa_api.position_pb2 import LanePosition, Position, WorldPosition
@@ -23,6 +24,7 @@ from pisa_api.types import (
     ControlMode,
     EgoConfigData,
     GoalConfigData,
+    InitResponse,
     LanePositionData,
     ObjectKinematicData,
     ObjectStateData,
@@ -43,6 +45,27 @@ from pisa_api.types import (
     SpawnConfigData,
     WorldPositionData,
 )
+
+
+def init_response_to_proto(response: InitResponse) -> InitResponseMessage:
+    """Convert a validated initialization result to its wire representation."""
+    _validate_non_empty_string(response.name, "InitResponse.name")
+    if not isinstance(response.metadata, dict):
+        raise TypeError("InitResponse.metadata must be a dict")
+    return InitResponseMessage(name=response.name, metadata=_struct_from_dict(response.metadata))
+
+
+def init_response_from_proto(proto: InitResponseMessage) -> InitResponse:
+    """Convert a wire initialization result to the shared domain type."""
+    _validate_non_empty_string(proto.name, "InitResponse.name")
+    return InitResponse(name=proto.name, metadata=_dict_from_struct(proto.metadata))
+
+
+def _validate_non_empty_string(value: Any, field_name: str) -> None:
+    if not isinstance(value, str):
+        raise TypeError(f"{field_name} must be a string")
+    if not value.strip():
+        raise ValueError(f"{field_name} must not be empty or whitespace")
 
 
 def path_from_proto(path: PathMessage) -> Optional[Path]:
@@ -464,6 +487,8 @@ __all__ = [
     "ego_config_to_proto",
     "goal_config_from_proto",
     "goal_config_to_proto",
+    "init_response_from_proto",
+    "init_response_to_proto",
     "lane_position_from_proto",
     "lane_position_to_proto",
     "object_kinematic_from_proto",

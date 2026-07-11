@@ -1,5 +1,7 @@
 """AV-system-friendly API built on top of the generated AvServer protobufs."""
 
+from pisa_api.types import InitResponse
+
 from .conversions import (
     collision_info_from_proto,
     collision_info_to_proto,
@@ -108,6 +110,7 @@ __all__ = [
     "GenericAvService",
     "GoalConfigData",
     "InitRequest",
+    "InitResponse",
     "InvalidAvRequest",
     "LanePositionData",
     "ObjectKinematicData",

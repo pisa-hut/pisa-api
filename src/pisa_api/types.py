@@ -21,6 +21,14 @@ class ControlMode(IntEnum):
     THROTTLE_STEER_BREAK = 6
 
 
+@dataclass(frozen=True)
+class InitResponse:
+    """Result of a successful wrapper initialization."""
+
+    name: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
 class RoadObjectType(IntEnum):
     UNKNOWN = 0
     CAR = 1
@@ -229,6 +237,7 @@ __all__ = [
     "ControlMode",
     "EgoConfigData",
     "GoalConfigData",
+    "InitResponse",
     "LanePositionData",
     "ObjectKinematicData",
     "ObjectStateData",

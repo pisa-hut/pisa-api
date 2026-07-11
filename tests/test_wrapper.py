@@ -20,20 +20,26 @@ from pisa_api.wrapper import (
 
 class _Sim(BaseSimServer):
     _name = "TestSim"
+    _version = "2.0.0"
 
 
 class _Av(BaseAvServer):
     _name = "TestAv"
+    _version = "3.0.0"
 
 
 def test_base_sim_server_ping_returns_named_pong() -> None:
     pong = _Sim().Ping(Empty(), MagicMock(peer=lambda: "test"))
     assert pong.msg == "TestSim alive"
+    assert pong.name == "TestSim"
+    assert pong.version == "2.0.0"
 
 
 def test_base_av_server_ping_returns_named_pong() -> None:
     pong = _Av().Ping(Empty(), MagicMock(peer=lambda: "test"))
     assert pong.msg == "TestAv alive"
+    assert pong.name == "TestAv"
+    assert pong.version == "3.0.0"
 
 
 def test_base_sim_server_inherits_grpc_servicer() -> None:

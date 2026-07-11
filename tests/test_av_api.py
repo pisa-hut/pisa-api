@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import grpc
+import pytest
 
 from pisa_api import av_server_pb2
 from pisa_api.av import (
@@ -11,6 +12,7 @@ from pisa_api.av import (
     ControlMode,
     GenericAvService,
     InitRequest,
+    InitResponse,
     InvalidAvRequest,
     ObjectKinematicData,
     ObjectStateData,
@@ -67,6 +69,7 @@ class FakeAvSystem:
 
     def init(self, request: InitRequest):
         self.init_request = request
+        return InitResponse(name="fake-agent", metadata={"runtime": {"ready": True}})
 
     def reset(self, request: ResetRequest) -> ResetResponse:
         self.reset_request = request
@@ -160,7 +163,7 @@ def test_av_control_responses_round_trip() -> None:
 
 def test_generic_av_service_maps_lifecycle_requests_to_dataclass_av_system() -> None:
     av_system = FakeAvSystem()
-    service = GenericAvService(av_system, name="FakeAV")
+    service = GenericAvService(av_system, name="FakeAV", version="1.2.3")
 
     init_request = av_server_pb2.AvServerMessages.InitRequest()
     init_request.config.config.update({"use_sim_time": True})
@@ -169,9 +172,11 @@ def test_generic_av_service_maps_lifecycle_requests_to_dataclass_av_system() -> 
     init_request.dt = 0.05
 
     init_context = FakeContext()
-    service.Init(init_request, init_context)
+    init_response = service.Init(init_request, init_context)
 
     assert init_context.code is None  # Init no longer signals via response payload
+    assert init_response.name == "fake-agent"
+    assert init_response.metadata["runtime"]["ready"] is True
     assert av_system.init_request.config == {"use_sim_time": True}
     assert av_system.init_request.output_dir.as_posix() == "/tmp/output"
     assert av_system.init_request.map_name == "town"
@@ -195,7 +200,7 @@ def test_generic_av_service_maps_lifecycle_requests_to_dataclass_av_system() -> 
 
 def test_generic_av_service_rejects_step_before_reset() -> None:
     av_system = FakeAvSystem()
-    service = GenericAvService(av_system, name="FakeAV")
+    service = GenericAvService(av_system, name="FakeAV", version="1.2.3")
 
     init_context = FakeContext()
     service.Init(av_server_pb2.AvServerMessages.InitRequest(), init_context)
@@ -207,6 +212,72 @@ def test_generic_av_service_rejects_step_before_reset() -> None:
     assert response == av_server_pb2.AvServerMessages.StepResponse()
     assert context.code == grpc.StatusCode.FAILED_PRECONDITION
     assert "Reset" in context.details
+
+
+def test_av_init_contract_failure_keeps_lifecycle_uninitialized() -> None:
+    for invalid in (
+        None,
+        "component",
+        InitResponse(name=" "),
+        InitResponse("x", {"bad": object()}),
+    ):
+        av_system = FakeAvSystem()
+        av_system.init = lambda _request, value=invalid: value
+        service = GenericAvService(av_system, name="wrapper", version="1.0")
+        context = FakeContext()
+
+        service.Init(av_server_pb2.AvServerMessages.InitRequest(), context)
+
+        assert context.code == grpc.StatusCode.INTERNAL
+        assert service._initialized is False  # type: ignore[attr-defined]
+        reset_context = FakeContext()
+        service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), reset_context)
+        assert reset_context.code == grpc.StatusCode.FAILED_PRECONDITION
+
+
+@pytest.mark.parametrize(
+    "exc,status",
+    [
+        (InvalidAvRequest("bad"), grpc.StatusCode.INVALID_ARGUMENT),
+        (AvPreconditionFailed("not ready"), grpc.StatusCode.FAILED_PRECONDITION),
+        (AvUnavailable("down"), grpc.StatusCode.UNAVAILABLE),
+        (AvTimeout("slow"), grpc.StatusCode.DEADLINE_EXCEEDED),
+    ],
+)
+def test_av_init_preserves_expected_error_mapping(exc, status) -> None:
+    av_system = FakeAvSystem()
+    av_system.init = lambda _request: (_ for _ in ()).throw(exc)
+    service = GenericAvService(av_system, name="wrapper", version="1.0")
+    context = FakeContext()
+
+    service.Init(av_server_pb2.AvServerMessages.InitRequest(), context)
+
+    assert context.code == status
+    assert service._initialized is False  # type: ignore[attr-defined]
+
+
+def test_av_ping_preserves_explicit_wrapper_identity() -> None:
+    service = GenericAvService(FakeAvSystem(), name=" wrapper ", version=" v1 ")
+    pong = service.Ping(None, FakeContext())
+    assert (pong.msg, pong.name, pong.version) == (
+        " wrapper  alive",
+        " wrapper ",
+        " v1 ",
+    )
+
+
+@pytest.mark.parametrize("field,value", [("name", 1), ("version", None)])
+def test_av_identity_rejects_non_strings(field, value) -> None:
+    identity = {"name": "wrapper", "version": "1.0", field: value}
+    with pytest.raises(TypeError):
+        GenericAvService(FakeAvSystem(), **identity)
+
+
+@pytest.mark.parametrize("field,value", [("name", ""), ("name", " "), ("version", "\t")])
+def test_av_identity_rejects_blank_strings(field, value) -> None:
+    identity = {"name": "wrapper", "version": "1.0", field: value}
+    with pytest.raises(ValueError):
+        GenericAvService(FakeAvSystem(), **identity)
 
 
 class _RaisingAvSystem(FakeAvSystem):
@@ -233,7 +304,9 @@ def _init_and_reset(service: GenericAvService) -> None:
 
 
 def test_reset_invalid_av_request_returns_invalid_argument() -> None:
-    service = GenericAvService(_RaisingAvSystem(InvalidAvRequest("bad logical")), name="FakeAV")
+    service = GenericAvService(
+        _RaisingAvSystem(InvalidAvRequest("bad logical")), name="FakeAV", version="1.2.3"
+    )
     service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
@@ -241,7 +314,9 @@ def test_reset_invalid_av_request_returns_invalid_argument() -> None:
 
 
 def test_reset_precondition_failed_returns_failed_precondition() -> None:
-    service = GenericAvService(_RaisingAvSystem(AvPreconditionFailed("no route")), name="FakeAV")
+    service = GenericAvService(
+        _RaisingAvSystem(AvPreconditionFailed("no route")), name="FakeAV", version="1.2.3"
+    )
     service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
@@ -253,7 +328,9 @@ def test_reset_runtime_error_is_internal() -> None:
     well-known gRPC status codes. A bare RuntimeError from the
     wrapper is treated as a wrapper bug → INTERNAL, not as a per-
     concrete precondition failure."""
-    service = GenericAvService(_RaisingAvSystem(RuntimeError("oops")), name="FakeAV")
+    service = GenericAvService(
+        _RaisingAvSystem(RuntimeError("oops")), name="FakeAV", version="1.2.3"
+    )
     service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
@@ -261,7 +338,9 @@ def test_reset_runtime_error_is_internal() -> None:
 
 
 def test_reset_av_unavailable_returns_unavailable() -> None:
-    service = GenericAvService(_RaisingAvSystem(AvUnavailable("down")), name="FakeAV")
+    service = GenericAvService(
+        _RaisingAvSystem(AvUnavailable("down")), name="FakeAV", version="1.2.3"
+    )
     service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
@@ -269,7 +348,9 @@ def test_reset_av_unavailable_returns_unavailable() -> None:
 
 
 def test_reset_av_timeout_returns_deadline_exceeded() -> None:
-    service = GenericAvService(_RaisingAvSystem(AvTimeout("took too long")), name="FakeAV")
+    service = GenericAvService(
+        _RaisingAvSystem(AvTimeout("took too long")), name="FakeAV", version="1.2.3"
+    )
     service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
@@ -281,7 +362,7 @@ def test_reset_returning_none_is_internal_error() -> None:
     surfaces as INTERNAL so the wrapper author can see the bug."""
     av_system = FakeAvSystem()
     av_system.reset = lambda _req: None  # contract violation
-    service = GenericAvService(av_system, name="FakeAV")
+    service = GenericAvService(av_system, name="FakeAV", version="1.2.3")
     service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.Reset(av_server_pb2.AvServerMessages.ResetRequest(), context)
@@ -293,7 +374,7 @@ def test_step_returning_bare_control_command_is_internal_error() -> None:
     """Old shortcut where step() returned a bare ControlCommand is gone;
     wrappers must wrap it in a StepResponse explicitly."""
     av_system = FakeAvSystem()
-    service = GenericAvService(av_system, name="FakeAV")
+    service = GenericAvService(av_system, name="FakeAV", version="1.2.3")
     _init_and_reset(service)
     av_system.step = lambda _req: ControlCommand(mode=ControlMode.ACKERMANN)
     context = FakeContext()
@@ -307,7 +388,7 @@ def test_step_invalid_av_request_returns_invalid_argument() -> None:
     # `step` to raise — otherwise Reset would fail and Step would short-
     # circuit on the "not reset" guard before reaching the step handler.
     av_system = FakeAvSystem()
-    service = GenericAvService(av_system, name="FakeAV")
+    service = GenericAvService(av_system, name="FakeAV", version="1.2.3")
     _init_and_reset(service)
 
     def _raise(_req):
@@ -321,7 +402,7 @@ def test_step_invalid_av_request_returns_invalid_argument() -> None:
 
 def test_stop_clears_initialized_state_on_success() -> None:
     av_system = FakeAvSystem()
-    service = GenericAvService(av_system, name="FakeAV")
+    service = GenericAvService(av_system, name="FakeAV", version="1.2.3")
     service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.Stop(av_server_pb2.AvServerMessages.InitRequest(), context)
@@ -332,7 +413,7 @@ def test_stop_clears_initialized_state_on_success() -> None:
 
 
 def test_stop_before_init_returns_failed_precondition() -> None:
-    service = GenericAvService(FakeAvSystem(), name="FakeAV")
+    service = GenericAvService(FakeAvSystem(), name="FakeAV", version="1.2.3")
     context = FakeContext()
     service.Stop(av_server_pb2.AvServerMessages.InitRequest(), context)
     assert context.code == grpc.StatusCode.FAILED_PRECONDITION
@@ -340,7 +421,7 @@ def test_stop_before_init_returns_failed_precondition() -> None:
 
 def test_stop_dispatches_av_unavailable_to_unavailable() -> None:
     av_system = FakeAvSystem()
-    service = GenericAvService(av_system, name="FakeAV")
+    service = GenericAvService(av_system, name="FakeAV", version="1.2.3")
     service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     av_system.stop = lambda: (_ for _ in ()).throw(AvUnavailable("AV gone"))
     context = FakeContext()
@@ -352,7 +433,7 @@ def test_stop_dispatches_av_unavailable_to_unavailable() -> None:
 
 def test_stop_dispatches_av_timeout_to_deadline_exceeded() -> None:
     av_system = FakeAvSystem()
-    service = GenericAvService(av_system, name="FakeAV")
+    service = GenericAvService(av_system, name="FakeAV", version="1.2.3")
     service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     av_system.stop = lambda: (_ for _ in ()).throw(AvTimeout("teardown slow"))
     context = FakeContext()
@@ -369,7 +450,7 @@ def test_should_quit_response_round_trips_through_proto() -> None:
 def test_should_quit_returns_proto_with_msg_when_initialized() -> None:
     av_system = FakeAvSystem()
     av_system.should_quit = lambda: ShouldQuitResponse(should_quit=True, msg="ego stuck")
-    service = GenericAvService(av_system, name="FakeAV")
+    service = GenericAvService(av_system, name="FakeAV", version="1.2.3")
     service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     resp = service.ShouldQuit(av_server_pb2.AvServerMessages.InitRequest(), context)
@@ -382,7 +463,7 @@ def test_should_quit_before_init_returns_false_without_calling_wrapper() -> None
     av_system = FakeAvSystem()
     called = []
     av_system.should_quit = lambda: called.append(True) or ShouldQuitResponse(should_quit=True)  # type: ignore[func-returns-value]
-    service = GenericAvService(av_system, name="FakeAV")
+    service = GenericAvService(av_system, name="FakeAV", version="1.2.3")
     context = FakeContext()
     resp = service.ShouldQuit(av_server_pb2.AvServerMessages.InitRequest(), context)
     assert resp.should_quit is False
@@ -393,7 +474,7 @@ def test_should_quit_before_init_returns_false_without_calling_wrapper() -> None
 def test_should_quit_wrong_return_type_is_internal() -> None:
     av_system = FakeAvSystem()
     av_system.should_quit = lambda: True  # bare bool, not a ShouldQuitResponse
-    service = GenericAvService(av_system, name="FakeAV")
+    service = GenericAvService(av_system, name="FakeAV", version="1.2.3")
     service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.ShouldQuit(av_server_pb2.AvServerMessages.InitRequest(), context)
@@ -404,7 +485,7 @@ def test_should_quit_wrong_return_type_is_internal() -> None:
 
 def test_should_quit_dispatches_av_unavailable_to_unavailable() -> None:
     av_system = FakeAvSystem()
-    service = GenericAvService(av_system, name="FakeAV")
+    service = GenericAvService(av_system, name="FakeAV", version="1.2.3")
     service.Init(av_server_pb2.AvServerMessages.InitRequest(), FakeContext())
     av_system.should_quit = lambda: (_ for _ in ()).throw(AvUnavailable("AV gone"))
     context = FakeContext()
@@ -432,7 +513,9 @@ def test_serve_av_system_wraps_existing_serve_av(monkeypatch) -> None:
 
     monkeypatch.setattr(service_module, "serve_av", fake_serve_av)
 
-    service_module.serve_av_system(FakeAvSystem(), name="FakeAV", port=1234, max_workers=2)
+    service_module.serve_av_system(
+        FakeAvSystem(), name="FakeAV", version="1.2.3", port=1234, max_workers=2
+    )
 
     assert isinstance(calls["servicer"], GenericAvService)
     assert calls["port"] == 1234

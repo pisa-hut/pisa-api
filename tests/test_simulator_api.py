@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import grpc
+import pytest
 
 from pisa_api import sim_server_pb2
 from pisa_api.simulator import (
@@ -11,6 +12,7 @@ from pisa_api.simulator import (
     ControlMode,
     GenericSimulatorService,
     InitRequest,
+    InitResponse,
     InvalidSimulatorRequest,
     ObjectKinematicData,
     ObjectStateData,
@@ -71,6 +73,7 @@ class FakeSimulator:
 
     def init(self, request: InitRequest):
         self.init_request = request
+        return InitResponse(name="carla", metadata={"runtime": {"ready": True}})
 
     def reset(self, request: ResetRequest) -> ResetResponse:
         self.reset_request = request
@@ -210,6 +213,7 @@ def test_generic_service_maps_lifecycle_requests_to_dataclass_simulator() -> Non
     service = GenericSimulatorService(
         simulator,
         name="Fake",
+        version="1.2.3",
         scenario_format="open_scenario1",
     )
 
@@ -220,9 +224,11 @@ def test_generic_service_maps_lifecycle_requests_to_dataclass_simulator() -> Non
     init_request.dt = 0.05
 
     init_context = FakeContext()
-    service.Init(init_request, init_context)
+    init_response = service.Init(init_request, init_context)
 
     assert init_context.code is None
+    assert init_response.name == "carla"
+    assert init_response.metadata["runtime"]["ready"] is True
     assert simulator.init_request.config == {"use_viewer": False}
     assert simulator.init_request.output_dir.as_posix() == "/tmp/output"
     assert simulator.init_request.dt == 0.05
@@ -250,6 +256,7 @@ def test_generic_service_accepts_legacy_scenario_format_parameter() -> None:
     service = GenericSimulatorService(
         simulator,
         name="Fake",
+        version="1.2.3",
         scenario_format="open_scenario1",
     )
 
@@ -265,6 +272,7 @@ def test_generic_service_accepts_multiple_scenario_formats() -> None:
     service = GenericSimulatorService(
         simulator,
         name="Fake",
+        version="1.2.3",
         scenario_formats={"open_scenario1", "open_scenario2"},
     )
 
@@ -280,6 +288,7 @@ def test_generic_service_rejects_unsupported_scenario_format_with_supported_list
     service = GenericSimulatorService(
         simulator,
         name="Fake",
+        version="1.2.3",
         scenario_formats={"open_scenario2", "open_scenario1"},
     )
 
@@ -299,6 +308,7 @@ def test_generic_service_rejects_ambiguous_scenario_format_arguments() -> None:
         GenericSimulatorService(
             FakeSimulator(),
             name="Fake",
+            version="1.2.3",
             scenario_format="open_scenario1",
             scenario_formats={"open_scenario2"},
         )
@@ -311,7 +321,7 @@ def test_generic_service_rejects_ambiguous_scenario_format_arguments() -> None:
 
 def test_generic_service_skips_format_validation_when_no_formats_are_configured() -> None:
     simulator = FakeSimulator()
-    service = GenericSimulatorService(simulator, name="Fake")
+    service = GenericSimulatorService(simulator, name="Fake", version="1.2.3")
 
     context = FakeContext()
     service.Init(make_init_request("custom_format"), context)
@@ -322,7 +332,7 @@ def test_generic_service_skips_format_validation_when_no_formats_are_configured(
 
 def test_generic_service_rejects_step_before_reset() -> None:
     simulator = FakeSimulator()
-    service = GenericSimulatorService(simulator, name="Fake")
+    service = GenericSimulatorService(simulator, name="Fake", version="1.2.3")
 
     init_context = FakeContext()
     service.Init(sim_server_pb2.SimServerMessages.InitRequest(), init_context)
@@ -336,12 +346,73 @@ def test_generic_service_rejects_step_before_reset() -> None:
     assert "Reset" in context.details
 
 
+def test_simulator_init_contract_failure_keeps_lifecycle_uninitialized() -> None:
+    for invalid in (None, "carla", InitResponse(name=" "), InitResponse("x", {"bad": object()})):
+        simulator = FakeSimulator()
+        simulator.init = lambda _request, value=invalid: value
+        service = GenericSimulatorService(simulator, name="wrapper", version="1.0")
+        context = FakeContext()
+
+        service.Init(sim_server_pb2.SimServerMessages.InitRequest(), context)
+
+        assert context.code == grpc.StatusCode.INTERNAL
+        assert service._initialized is False  # type: ignore[attr-defined]
+        reset_context = FakeContext()
+        service.Reset(sim_server_pb2.SimServerMessages.ResetRequest(), reset_context)
+        assert reset_context.code == grpc.StatusCode.FAILED_PRECONDITION
+
+
+@pytest.mark.parametrize(
+    "exc,status",
+    [
+        (InvalidSimulatorRequest("bad"), grpc.StatusCode.INVALID_ARGUMENT),
+        (SimulatorPreconditionFailed("not ready"), grpc.StatusCode.FAILED_PRECONDITION),
+        (SimulatorUnavailable("down"), grpc.StatusCode.UNAVAILABLE),
+        (SimulatorTimeout("slow"), grpc.StatusCode.DEADLINE_EXCEEDED),
+    ],
+)
+def test_simulator_init_preserves_expected_error_mapping(exc, status) -> None:
+    simulator = FakeSimulator()
+    simulator.init = lambda _request: (_ for _ in ()).throw(exc)
+    service = GenericSimulatorService(simulator, name="wrapper", version="1.0")
+    context = FakeContext()
+
+    service.Init(sim_server_pb2.SimServerMessages.InitRequest(), context)
+
+    assert context.code == status
+    assert service._initialized is False  # type: ignore[attr-defined]
+
+
+def test_simulator_ping_preserves_explicit_wrapper_identity() -> None:
+    service = GenericSimulatorService(FakeSimulator(), name=" wrapper ", version=" v1 ")
+    pong = service.Ping(None, FakeContext())
+    assert (pong.msg, pong.name, pong.version) == (
+        " wrapper  alive",
+        " wrapper ",
+        " v1 ",
+    )
+
+
+@pytest.mark.parametrize("field,value", [("name", 1), ("version", None)])
+def test_simulator_identity_rejects_non_strings(field, value) -> None:
+    identity = {"name": "wrapper", "version": "1.0", field: value}
+    with pytest.raises(TypeError):
+        GenericSimulatorService(FakeSimulator(), **identity)
+
+
+@pytest.mark.parametrize("field,value", [("name", ""), ("name", " "), ("version", "\t")])
+def test_simulator_identity_rejects_blank_strings(field, value) -> None:
+    identity = {"name": "wrapper", "version": "1.0", field: value}
+    with pytest.raises(ValueError):
+        GenericSimulatorService(FakeSimulator(), **identity)
+
+
 def test_reset_returning_none_is_internal_error() -> None:
     """Wrapper contract: reset() must return ResetResponse. None
     surfaces as INTERNAL so the wrapper author can see the bug."""
     simulator = FakeSimulator()
     simulator.reset = lambda _req: None
-    service = GenericSimulatorService(simulator, name="Fake")
+    service = GenericSimulatorService(simulator, name="Fake", version="1.2.3")
     service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.Reset(sim_server_pb2.SimServerMessages.ResetRequest(), context)
@@ -366,7 +437,9 @@ class _RaisingSimulator(FakeSimulator):
 
 def test_reset_invalid_simulator_request_returns_invalid_argument() -> None:
     service = GenericSimulatorService(
-        _RaisingSimulator(InvalidSimulatorRequest("bad logical")), name="Fake"
+        _RaisingSimulator(InvalidSimulatorRequest("bad logical")),
+        name="Fake",
+        version="1.2.3",
     )
     service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
@@ -376,7 +449,9 @@ def test_reset_invalid_simulator_request_returns_invalid_argument() -> None:
 
 def test_reset_simulator_precondition_failed_returns_failed_precondition() -> None:
     service = GenericSimulatorService(
-        _RaisingSimulator(SimulatorPreconditionFailed("no spawn")), name="Fake"
+        _RaisingSimulator(SimulatorPreconditionFailed("no spawn")),
+        name="Fake",
+        version="1.2.3",
     )
     service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
@@ -386,7 +461,9 @@ def test_reset_simulator_precondition_failed_returns_failed_precondition() -> No
 
 def test_reset_simulator_unavailable_returns_unavailable() -> None:
     service = GenericSimulatorService(
-        _RaisingSimulator(SimulatorUnavailable("sim down")), name="Fake"
+        _RaisingSimulator(SimulatorUnavailable("sim down")),
+        name="Fake",
+        version="1.2.3",
     )
     service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
@@ -396,7 +473,9 @@ def test_reset_simulator_unavailable_returns_unavailable() -> None:
 
 def test_reset_simulator_timeout_returns_deadline_exceeded() -> None:
     service = GenericSimulatorService(
-        _RaisingSimulator(SimulatorTimeout("took too long")), name="Fake"
+        _RaisingSimulator(SimulatorTimeout("took too long")),
+        name="Fake",
+        version="1.2.3",
     )
     service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
@@ -409,7 +488,9 @@ def test_reset_simulator_runtime_error_is_internal() -> None:
     well-known gRPC status codes. A bare RuntimeError from the
     wrapper is treated as a wrapper bug → INTERNAL, not as a
     per-concrete precondition failure."""
-    service = GenericSimulatorService(_RaisingSimulator(RuntimeError("oops")), name="Fake")
+    service = GenericSimulatorService(
+        _RaisingSimulator(RuntimeError("oops")), name="Fake", version="1.2.3"
+    )
     service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.Reset(sim_server_pb2.SimServerMessages.ResetRequest(), context)
@@ -420,7 +501,7 @@ def test_step_returning_bare_runtime_frame_is_internal_error() -> None:
     """Old shortcut where step() returned a bare RuntimeFrameData is gone;
     wrappers must wrap it in a StepResponse explicitly."""
     simulator = FakeSimulator()
-    service = GenericSimulatorService(simulator, name="Fake")
+    service = GenericSimulatorService(simulator, name="Fake", version="1.2.3")
     service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
     service.Reset(sim_server_pb2.SimServerMessages.ResetRequest(), FakeContext())
     simulator.step = lambda _req: RuntimeFrameData(sim_time_ns=0)
@@ -432,7 +513,7 @@ def test_step_returning_bare_runtime_frame_is_internal_error() -> None:
 
 def test_stop_clears_initialized_state_on_success_sim() -> None:
     simulator = FakeSimulator()
-    service = GenericSimulatorService(simulator, name="Fake")
+    service = GenericSimulatorService(simulator, name="Fake", version="1.2.3")
     service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.Stop(sim_server_pb2.SimServerMessages.InitRequest(), context)
@@ -442,7 +523,7 @@ def test_stop_clears_initialized_state_on_success_sim() -> None:
 
 
 def test_stop_before_init_returns_failed_precondition_sim() -> None:
-    service = GenericSimulatorService(FakeSimulator(), name="Fake")
+    service = GenericSimulatorService(FakeSimulator(), name="Fake", version="1.2.3")
     context = FakeContext()
     service.Stop(sim_server_pb2.SimServerMessages.InitRequest(), context)
     assert context.code == grpc.StatusCode.FAILED_PRECONDITION
@@ -450,7 +531,7 @@ def test_stop_before_init_returns_failed_precondition_sim() -> None:
 
 def test_stop_dispatches_simulator_unavailable_to_unavailable() -> None:
     simulator = FakeSimulator()
-    service = GenericSimulatorService(simulator, name="Fake")
+    service = GenericSimulatorService(simulator, name="Fake", version="1.2.3")
     service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
     simulator.stop = lambda: (_ for _ in ()).throw(SimulatorUnavailable("sim gone"))
     context = FakeContext()
@@ -461,7 +542,7 @@ def test_stop_dispatches_simulator_unavailable_to_unavailable() -> None:
 
 def test_stop_dispatches_simulator_timeout_to_deadline_exceeded() -> None:
     simulator = FakeSimulator()
-    service = GenericSimulatorService(simulator, name="Fake")
+    service = GenericSimulatorService(simulator, name="Fake", version="1.2.3")
     service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
     simulator.stop = lambda: (_ for _ in ()).throw(SimulatorTimeout("teardown slow"))
     context = FakeContext()
@@ -478,7 +559,7 @@ def test_should_quit_response_round_trips_through_proto_sim() -> None:
 def test_should_quit_returns_proto_with_msg_when_initialized_sim() -> None:
     simulator = FakeSimulator()
     simulator.should_quit = lambda: ShouldQuitResponse(should_quit=True, msg="scenario complete")
-    service = GenericSimulatorService(simulator, name="Fake")
+    service = GenericSimulatorService(simulator, name="Fake", version="1.2.3")
     service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     resp = service.ShouldQuit(sim_server_pb2.SimServerMessages.InitRequest(), context)
@@ -491,7 +572,7 @@ def test_should_quit_before_init_returns_false_without_calling_wrapper_sim() -> 
     simulator = FakeSimulator()
     called = []
     simulator.should_quit = lambda: called.append(True) or ShouldQuitResponse(should_quit=True)  # type: ignore[func-returns-value]
-    service = GenericSimulatorService(simulator, name="Fake")
+    service = GenericSimulatorService(simulator, name="Fake", version="1.2.3")
     context = FakeContext()
     resp = service.ShouldQuit(sim_server_pb2.SimServerMessages.InitRequest(), context)
     assert resp.should_quit is False
@@ -502,7 +583,7 @@ def test_should_quit_before_init_returns_false_without_calling_wrapper_sim() -> 
 def test_should_quit_wrong_return_type_is_internal_sim() -> None:
     simulator = FakeSimulator()
     simulator.should_quit = lambda: True  # bare bool, not a ShouldQuitResponse
-    service = GenericSimulatorService(simulator, name="Fake")
+    service = GenericSimulatorService(simulator, name="Fake", version="1.2.3")
     service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
     context = FakeContext()
     service.ShouldQuit(sim_server_pb2.SimServerMessages.InitRequest(), context)
@@ -513,7 +594,7 @@ def test_should_quit_wrong_return_type_is_internal_sim() -> None:
 
 def test_should_quit_dispatches_simulator_unavailable_to_unavailable() -> None:
     simulator = FakeSimulator()
-    service = GenericSimulatorService(simulator, name="Fake")
+    service = GenericSimulatorService(simulator, name="Fake", version="1.2.3")
     service.Init(sim_server_pb2.SimServerMessages.InitRequest(), FakeContext())
     simulator.should_quit = lambda: (_ for _ in ()).throw(SimulatorUnavailable("sim gone"))
     context = FakeContext()
@@ -541,6 +622,7 @@ def test_serve_simulator_wraps_existing_serve_sim(monkeypatch) -> None:
     service_module.serve_simulator(
         FakeSimulator(),
         name="Fake",
+        version="1.2.3",
         scenario_formats={"open_scenario1", "open_scenario2"},
         port=1234,
         max_workers=2,

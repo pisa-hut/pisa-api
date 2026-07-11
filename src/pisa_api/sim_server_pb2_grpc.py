@@ -4,6 +4,7 @@ import grpc
 import warnings
 
 from . import empty_pb2 as empty__pb2
+from . import initialization_pb2 as initialization__pb2
 from . import pong_pb2 as pong__pb2
 from . import sim_server_pb2 as sim__server__pb2
 
@@ -44,7 +45,7 @@ class SimServerStub(object):
         self.Init = channel.unary_unary(
                 '/pisa_api.SimServer/Init',
                 request_serializer=sim__server__pb2.SimServerMessages.InitRequest.SerializeToString,
-                response_deserializer=empty__pb2.Empty.FromString,
+                response_deserializer=initialization__pb2.InitResponse.FromString,
                 _registered_method=True)
         self.Reset = channel.unary_unary(
                 '/pisa_api.SimServer/Reset',
@@ -136,7 +137,7 @@ def add_SimServerServicer_to_server(servicer, server):
             'Init': grpc.unary_unary_rpc_method_handler(
                     servicer.Init,
                     request_deserializer=sim__server__pb2.SimServerMessages.InitRequest.FromString,
-                    response_serializer=empty__pb2.Empty.SerializeToString,
+                    response_serializer=initialization__pb2.InitResponse.SerializeToString,
             ),
             'Reset': grpc.unary_unary_rpc_method_handler(
                     servicer.Reset,
@@ -217,7 +218,7 @@ class SimServer(object):
             target,
             '/pisa_api.SimServer/Init',
             sim__server__pb2.SimServerMessages.InitRequest.SerializeToString,
-            empty__pb2.Empty.FromString,
+            initialization__pb2.InitResponse.FromString,
             options,
             channel_credentials,
             insecure,

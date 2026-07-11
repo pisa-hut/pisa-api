@@ -10,8 +10,12 @@ from typing import Any, Protocol
 import grpc
 
 from pisa_api import sim_server_pb2
+from pisa_api.conversions import init_response_to_proto
 from pisa_api.empty_pb2 import Empty
+from pisa_api.initialization_pb2 import InitResponse as InitResponseMessage
+from pisa_api.types import InitResponse
 from pisa_api.wrapper import BaseSimServer, serve_sim
+from pisa_api.wrapper.identity import validate_identity
 
 from .conversions import (
     init_request_from_proto,
@@ -34,11 +38,19 @@ logger = logging.getLogger(__name__)
 
 
 class Simulator(Protocol):
+    """Contract implemented by simulator wrappers.
+
+    Init, Reset, and Step must return their matching shared/domain response
+    dataclasses. ``None`` or another type is a wrapper-side contract error.
+    """
+
     # Reset and Step MUST return the matching response dataclass — no
     # `None`, no bare `RuntimeFrameData` shortcut. Anything else surfaces
     # as gRPC INTERNAL since it's a wrapper-side contract bug.
 
-    def init(self, request: InitRequest) -> None: ...
+    def init(self, request: InitRequest) -> InitResponse:
+        """Initialize and return the selected component identity."""
+        ...
 
     def reset(self, request: ResetRequest) -> ResetResponse: ...
 
@@ -91,10 +103,12 @@ class GenericSimulatorService(BaseSimServer):
         simulator: Simulator,
         *,
         name: str,
+        version: str,
         scenario_format: str | None = None,
         scenario_formats: Collection[str] | None = None,
     ) -> None:
-        self._name = name
+        self._name = validate_identity(name, "name")
+        self._version = validate_identity(version, "version")
         self._simulator = simulator
         self._scenario_formats = _normalize_scenario_formats(
             scenario_format=scenario_format,
@@ -122,16 +136,27 @@ class GenericSimulatorService(BaseSimServer):
                         f"Unsupported scenario format: {init_request.scenario.format}. "
                         f"Supported formats: {supported_formats}"
                     ),
-                    Empty(),
+                    InitResponseMessage(),
                 )
 
             try:
-                self._simulator.init(init_request)
+                response = self._simulator.init(init_request)
             except Exception as exc:
-                return self._dispatch_exception(context, "initialize", exc, Empty())
+                return self._dispatch_exception(context, "initialize", exc, InitResponseMessage())
 
+            if not isinstance(response, InitResponse):
+                return self._wrong_response_type(
+                    context, "init", "InitResponse", response, InitResponseMessage()
+                )
+            try:
+                proto_response = init_response_to_proto(response)
+                proto_response.SerializeToString()
+            except Exception as exc:
+                return self._dispatch_exception(
+                    context, "serialize initialization response for", exc, InitResponseMessage()
+                )
             self._initialized = True
-            return Empty()
+            return proto_response
 
     def Reset(self, request, context):  # noqa: N802
         logger.debug("Received Reset request from client: %s", _peer(context))
@@ -264,6 +289,7 @@ def serve_simulator(
     simulator: Simulator,
     *,
     name: str,
+    version: str,
     scenario_format: str | None = None,
     scenario_formats: Collection[str] | None = None,
     port: Any | None = None,
@@ -272,6 +298,7 @@ def serve_simulator(
     service = GenericSimulatorService(
         simulator,
         name=name,
+        version=version,
         scenario_format=scenario_format,
         scenario_formats=scenario_formats,
     )

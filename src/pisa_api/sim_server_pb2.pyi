@@ -1,6 +1,7 @@
 from . import config_pb2 as _config_pb2
 from . import control_pb2 as _control_pb2
 from . import empty_pb2 as _empty_pb2
+from . import initialization_pb2 as _initialization_pb2
 from . import path_pb2 as _path_pb2
 from . import pong_pb2 as _pong_pb2
 from . import scenario_pb2 as _scenario_pb2
