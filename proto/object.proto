@@ -56,6 +56,14 @@ message ObjectKinematic {
   // does not provide full vector velocity; a present (0, 0, 0) value means that
   // the producer explicitly reports zero velocity.
   Vector3 linear_velocity = 10;
+
+  // Optional authoritative steering tire angle feedback.
+  // Unit: radians. Uses the PISA canonical/ROS sign convention: left is
+  // positive and right is negative. The value is sampled at the same time_ns.
+  // An absent field means that the producer does not provide steering
+  // feedback; a present 0.0 value explicitly reports zero steering angle.
+  // This is simulator state feedback, not a control command.
+  optional double steering_tire_angle = 11;
 }
 
 message Shape{

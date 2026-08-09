@@ -145,6 +145,7 @@ class ObjectKinematicData:
     yaw_rate: float = 0.0
     yaw_acceleration: float = 0.0
     linear_velocity: Optional[Vector3Data] = None
+    steering_tire_angle: Optional[float] = None
 
 
 @dataclass(frozen=True)

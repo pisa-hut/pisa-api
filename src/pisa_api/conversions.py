@@ -270,6 +270,11 @@ def object_kinematic_from_proto(kinematic: ObjectKinematic) -> ObjectKinematicDa
             if kinematic.HasField("linear_velocity")
             else None
         ),
+        steering_tire_angle=(
+            kinematic.steering_tire_angle
+            if kinematic.HasField("steering_tire_angle")
+            else None
+        ),
     )
 
 
@@ -287,6 +292,8 @@ def object_kinematic_to_proto(kinematic: ObjectKinematicData) -> ObjectKinematic
     )
     if kinematic.linear_velocity is not None:
         proto.linear_velocity.CopyFrom(vector3_to_proto(kinematic.linear_velocity))
+    if kinematic.steering_tire_angle is not None:
+        proto.steering_tire_angle = kinematic.steering_tire_angle
     return proto
 
 
