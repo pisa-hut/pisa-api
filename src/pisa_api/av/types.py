@@ -28,6 +28,7 @@ from pisa_api.types import (
     ShapeType,
     ShapeVertexData,
     SpawnConfigData,
+    Vector3Data,
     WorldPositionData,
 )
 
@@ -99,5 +100,6 @@ __all__ = [
     "SpawnConfigData",
     "StepRequest",
     "StepResponse",
+    "Vector3Data",
     "WorldPositionData",
 ]

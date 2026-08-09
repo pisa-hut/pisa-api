@@ -40,6 +40,8 @@ from pisa_api.conversions import (
     simulator_object_to_proto,
     spawn_config_from_proto,
     spawn_config_to_proto,
+    vector3_from_proto,
+    vector3_to_proto,
     world_position_from_proto,
     world_position_to_proto,
 )
@@ -184,6 +186,8 @@ __all__ = [
     "step_request_to_proto",
     "step_response_from_proto",
     "step_response_to_proto",
+    "vector3_from_proto",
+    "vector3_to_proto",
     "world_position_from_proto",
     "world_position_to_proto",
 ]

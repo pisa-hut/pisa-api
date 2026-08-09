@@ -11,7 +11,7 @@ from pisa_api.collision_pb2 import ActorRef, CollisionInfo
 from pisa_api.config_pb2 import Config
 from pisa_api.control_pb2 import CtrlCmd
 from pisa_api.initialization_pb2 import InitResponse as InitResponseMessage
-from pisa_api.object_pb2 import ObjectKinematic, ObjectState, Shape
+from pisa_api.object_pb2 import ObjectKinematic, ObjectState, Shape, Vector3
 from pisa_api.path_pb2 import Path as PathMessage
 from pisa_api.position_pb2 import LanePosition, Position, WorldPosition
 from pisa_api.runtime_frame_pb2 import RuntimeFrame, SimulatorEgo, SimulatorObject
@@ -43,6 +43,7 @@ from pisa_api.types import (
     SimulatorEgoData,
     SimulatorObjectData,
     SpawnConfigData,
+    Vector3Data,
     WorldPositionData,
 )
 
@@ -245,6 +246,14 @@ def control_command_to_proto(ctrl_cmd: ControlCommand) -> CtrlCmd:
     )
 
 
+def vector3_from_proto(vector: Vector3) -> Vector3Data:
+    return Vector3Data(x=vector.x, y=vector.y, z=vector.z)
+
+
+def vector3_to_proto(vector: Vector3Data) -> Vector3:
+    return Vector3(x=vector.x, y=vector.y, z=vector.z)
+
+
 def object_kinematic_from_proto(kinematic: ObjectKinematic) -> ObjectKinematicData:
     return ObjectKinematicData(
         time_ns=kinematic.time_ns,
@@ -256,11 +265,16 @@ def object_kinematic_from_proto(kinematic: ObjectKinematic) -> ObjectKinematicDa
         acceleration=kinematic.acceleration,
         yaw_rate=kinematic.yaw_rate,
         yaw_acceleration=kinematic.yaw_acceleration,
+        linear_velocity=(
+            vector3_from_proto(kinematic.linear_velocity)
+            if kinematic.HasField("linear_velocity")
+            else None
+        ),
     )
 
 
 def object_kinematic_to_proto(kinematic: ObjectKinematicData) -> ObjectKinematic:
-    return ObjectKinematic(
+    proto = ObjectKinematic(
         time_ns=kinematic.time_ns,
         x=kinematic.x,
         y=kinematic.y,
@@ -271,6 +285,9 @@ def object_kinematic_to_proto(kinematic: ObjectKinematicData) -> ObjectKinematic
         yaw_rate=kinematic.yaw_rate,
         yaw_acceleration=kinematic.yaw_acceleration,
     )
+    if kinematic.linear_velocity is not None:
+        proto.linear_velocity.CopyFrom(vector3_to_proto(kinematic.linear_velocity))
+    return proto
 
 
 def shape_from_proto(shape: Shape) -> ShapeData:
@@ -519,4 +536,6 @@ __all__ = [
     "spawn_config_to_proto",
     "world_position_from_proto",
     "world_position_to_proto",
+    "vector3_from_proto",
+    "vector3_to_proto",
 ]

@@ -25,19 +25,37 @@ enum ShapeType {
   POLYGON      = 2;
 }
 
+// A three-dimensional vector in the canonical world coordinate frame.
+message Vector3 {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
 message ObjectKinematic {
-    // timestamp in nanoseconds
+  // Timestamp in nanoseconds.
   int64  time_ns = 1;
   double x       = 2;
   double y       = 3;
   double z       = 4;
   double yaw     = 5;
 
+  // Unit: m/s. Signed longitudinal speed along the object's forward direction.
+  // This is not the Euclidean magnitude of linear_velocity and may be negative
+  // when the object moves backward.
   double speed        = 6;
   double acceleration = 7;
 
   double yaw_rate         = 8;
   double yaw_acceleration = 9;
+
+  // Optional authoritative linear velocity.
+  // Unit: m/s. Components use the same canonical world coordinate frame as x/y/z
+  // and are sampled at the same time_ns. The vector includes longitudinal,
+  // lateral, and vertical components. An absent field means that the producer
+  // does not provide full vector velocity; a present (0, 0, 0) value means that
+  // the producer explicitly reports zero velocity.
+  Vector3 linear_velocity = 10;
 }
 
 message Shape{
