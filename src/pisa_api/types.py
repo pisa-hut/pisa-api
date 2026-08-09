@@ -127,6 +127,13 @@ class ControlCommand:
 
 
 @dataclass(frozen=True)
+class Vector3Data:
+    x: float = 0.0
+    y: float = 0.0
+    z: float = 0.0
+
+
+@dataclass(frozen=True)
 class ObjectKinematicData:
     time_ns: int = 0
     x: float = 0.0
@@ -137,6 +144,8 @@ class ObjectKinematicData:
     acceleration: float = 0.0
     yaw_rate: float = 0.0
     yaw_acceleration: float = 0.0
+    linear_velocity: Optional[Vector3Data] = None
+    steering_tire_angle: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -256,5 +265,6 @@ __all__ = [
     "SimulatorEgoData",
     "SimulatorObjectData",
     "SpawnConfigData",
+    "Vector3Data",
     "WorldPositionData",
 ]

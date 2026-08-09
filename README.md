@@ -15,7 +15,7 @@ Or pin in `pyproject.toml` the way every downstream consumer already does:
 ```toml
 [project]
 dependencies = [
-    "pisa-api>=0.4.1",
+    "pisa-api>=0.4.3",
 ]
 
 [tool.uv.sources]
@@ -39,6 +39,30 @@ Both expose:
 - A `Protocol` (`AvSystem` / `Simulator`) describing the four methods a wrapper must implement.
 - A `GenericAvService` / `GenericSimulatorService` that adapts the proto layer onto that Protocol.
 - A `serve_av_system()` / `serve_simulator()` convenience entry point.
+
+## Kinematic semantics
+
+`ObjectKinematic.speed` remains a scalar in m/s: it is the signed longitudinal
+speed along the object's forward direction. It is not the Euclidean magnitude
+of the object's velocity and may be negative when the object moves backward.
+
+`ObjectKinematic.linear_velocity` is an optional authoritative 3D vector in
+m/s, expressed in the canonical world coordinate frame used by `x`, `y`, and
+`z`, and sampled at the same `time_ns`. It contains longitudinal, lateral, and
+vertical components. An absent field means that the producer does not provide
+the full vector; a present `(0, 0, 0)` value explicitly reports zero velocity.
+
+Therefore, `norm(linear_velocity)` does not necessarily equal `abs(speed)`,
+for example during vertical motion, lateral slip, vehicle pitch or grade, or
+simulator-specific dynamics.
+
+`ObjectKinematic.steering_tire_angle` is optional authoritative simulator
+feedback in radians, sampled at the same `time_ns`. It uses the PISA
+canonical/ROS sign convention: left is positive and right is negative. An
+absent field means that the producer does not provide steering feedback; a
+present `0.0` explicitly reports zero steering angle. This is state feedback,
+not a control command, and the API does not apply simulator-specific gains or
+conversions.
 
 ## Implementing a wrapper
 

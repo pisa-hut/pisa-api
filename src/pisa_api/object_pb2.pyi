@@ -46,8 +46,18 @@ BOUNDING_BOX: ShapeType
 CYLINDER: ShapeType
 POLYGON: ShapeType
 
+class Vector3(_message.Message):
+    __slots__ = ("x", "y", "z")
+    X_FIELD_NUMBER: _ClassVar[int]
+    Y_FIELD_NUMBER: _ClassVar[int]
+    Z_FIELD_NUMBER: _ClassVar[int]
+    x: float
+    y: float
+    z: float
+    def __init__(self, x: _Optional[float] = ..., y: _Optional[float] = ..., z: _Optional[float] = ...) -> None: ...
+
 class ObjectKinematic(_message.Message):
-    __slots__ = ("time_ns", "x", "y", "z", "yaw", "speed", "acceleration", "yaw_rate", "yaw_acceleration")
+    __slots__ = ("time_ns", "x", "y", "z", "yaw", "speed", "acceleration", "yaw_rate", "yaw_acceleration", "linear_velocity", "steering_tire_angle")
     TIME_NS_FIELD_NUMBER: _ClassVar[int]
     X_FIELD_NUMBER: _ClassVar[int]
     Y_FIELD_NUMBER: _ClassVar[int]
@@ -57,6 +67,8 @@ class ObjectKinematic(_message.Message):
     ACCELERATION_FIELD_NUMBER: _ClassVar[int]
     YAW_RATE_FIELD_NUMBER: _ClassVar[int]
     YAW_ACCELERATION_FIELD_NUMBER: _ClassVar[int]
+    LINEAR_VELOCITY_FIELD_NUMBER: _ClassVar[int]
+    STEERING_TIRE_ANGLE_FIELD_NUMBER: _ClassVar[int]
     time_ns: int
     x: float
     y: float
@@ -66,7 +78,9 @@ class ObjectKinematic(_message.Message):
     acceleration: float
     yaw_rate: float
     yaw_acceleration: float
-    def __init__(self, time_ns: _Optional[int] = ..., x: _Optional[float] = ..., y: _Optional[float] = ..., z: _Optional[float] = ..., yaw: _Optional[float] = ..., speed: _Optional[float] = ..., acceleration: _Optional[float] = ..., yaw_rate: _Optional[float] = ..., yaw_acceleration: _Optional[float] = ...) -> None: ...
+    linear_velocity: Vector3
+    steering_tire_angle: float
+    def __init__(self, time_ns: _Optional[int] = ..., x: _Optional[float] = ..., y: _Optional[float] = ..., z: _Optional[float] = ..., yaw: _Optional[float] = ..., speed: _Optional[float] = ..., acceleration: _Optional[float] = ..., yaw_rate: _Optional[float] = ..., yaw_acceleration: _Optional[float] = ..., linear_velocity: _Optional[_Union[Vector3, _Mapping]] = ..., steering_tire_angle: _Optional[float] = ...) -> None: ...
 
 class Shape(_message.Message):
     __slots__ = ("type", "dimensions", "vertices", "center", "reference_point")
