@@ -271,9 +271,7 @@ def object_kinematic_from_proto(kinematic: ObjectKinematic) -> ObjectKinematicDa
             else None
         ),
         steering_tire_angle=(
-            kinematic.steering_tire_angle
-            if kinematic.HasField("steering_tire_angle")
-            else None
+            kinematic.steering_tire_angle if kinematic.HasField("steering_tire_angle") else None
         ),
     )
 
